@@ -535,7 +535,8 @@ def handle_text_messages(message):
     # Приводим текст к нижнему регистру и чистим от лишних символов
     cleaned_text = clean_text(text_raw)
     active_chats[chat_id] = time.time()
-print(f"cleaned_text: '{cleaned_text}'")
+    print(f"cleaned_text:
+'{cleaned_text}'")
     # Сначала проверяем точные совпадения
     exact_responses = {
         "мия ты за рф": "ZOV ZOV CBO ZA НАШИХ ZOV ZOV ZOV",
