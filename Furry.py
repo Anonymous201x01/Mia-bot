@@ -4,7 +4,7 @@ import time
 import threading
 import os
 
-TOKEN = "7502179434:AAFxYdhxrdHNfPgQazLyyzqL7gNLIAYq2tU"
+TOKEN = "8131759793:AAHrptEdgk64PupEKDLoDrdPhAJ3zXjgfmA"
 INTERVAL = 3 * 60 * 60
 MAX_COUNT = 15
 
