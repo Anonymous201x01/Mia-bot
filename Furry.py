@@ -589,12 +589,12 @@ def handle_text_messages(message):
         bot.reply_to(message, exact_responses[cleaned_text])
         return
     for key, resp in general_responses.items():
-        if key in text:
+        if key in cleaned_text:
             bot.reply_to(message, resp)
             return
 
     for key, resp in normal_responses.items():
-        if key in text:
+        if key in cleaned_text:
             bot.reply_to(message, resp)
             return
 
