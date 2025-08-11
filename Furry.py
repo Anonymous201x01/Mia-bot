@@ -1,10 +1,10 @@
-# -*- coding: utf-8 -*-
 import telebot
 import random
 import time
 import os
 import re
 import json
+import threading
 from datetime import datetime, timedelta
 
 TOKEN = os.getenv("TOKEN")
@@ -13,14 +13,12 @@ MAX_COUNT = 15
 
 bot = telebot.TeleBot(TOKEN)
 
-# Файлы для хранения данных
 WARNS_FILE = "warns.json"
 BANS_FILE = "bans.json"
 MUTES_FILE = "mutes.json"
 USERS_FILE = "users.json"
 STATE_FILE = "bot_state.json"
 
-# Загрузка данных
 def load_data(filename):
     if os.path.exists(filename):
         with open(filename, "r", encoding="utf-8") as f:
@@ -37,7 +35,6 @@ mutes = load_data(MUTES_FILE)
 users = load_data(USERS_FILE)
 bot_state = load_data(STATE_FILE)
 
-# Инициализация состояния бота
 if not bot_state:
     bot_state = {
         "sleeping": False,
@@ -51,13 +48,11 @@ if not bot_state:
     }
     save_data(bot_state, STATE_FILE)
 
-# Галерея артов
 arts_folder = "."
 all_arts = [f for f in os.listdir(arts_folder) if f.lower().endswith((".jpg", ".png", ".jpeg"))]
 active_chats = {}
 chat_art_pools = {}
 
-# Сообщения для варнов
 WARN_MESSAGES = {
     1: "Будь аккуратнее, предупреждение 1/5",
     2: "Веди себя хорошо, предупреждение 2/5",
@@ -66,7 +61,6 @@ WARN_MESSAGES = {
     5: "Покеда хуесос, предупреждение 5/5. {user} был забанен"
 }
 
-# Функции для работы с пользователями
 def add_user(user):
     user_id = str(user.id)
     if user_id not in users:
@@ -94,7 +88,6 @@ def send_art(chat_id):
         bot.send_photo(chat_id, f)
     active_chats[chat_id] = time.time()
 
-# Проверка прав
 def is_admin(chat_id, user_id):
     try:
         member = bot.get_chat_member(chat_id, user_id)
@@ -105,15 +98,10 @@ def is_admin(chat_id, user_id):
 def is_owner(chat_id, user_id):
     return str(user_id) == str(OWNER_ID)
 
-def is_owner_or_admin(chat_id, user_id):
-    return is_owner(chat_id, user_id) or is_admin(chat_id, user_id)
-
-# Очистка старых данных
 def clean_old_data():
     global warns, mutes
     current_time = datetime.now()
     
-    # Очистка варнов
     for chat_id in list(warns.keys()):
         for user_id in list(warns[chat_id].keys()):
             warn_data = warns[chat_id][user_id]
@@ -122,10 +110,10 @@ def clean_old_data():
         if not warns[chat_id]:
             del warns[chat_id]
     
-    # Очистка мутов
     for chat_id in list(mutes.keys()):
         for user_id in list(mutes[chat_id].keys()):
-            if datetime.fromisoformat(mutes[chat_id][user_id]['until']) < current_time:
+            mute_end = datetime.fromisoformat(mutes[chat_id][user_id]['until'])
+            if mute_end < current_time:
                 try:
                     bot.restrict_chat_member(
                         chat_id=chat_id,
@@ -144,7 +132,15 @@ def clean_old_data():
     save_data(warns, WARNS_FILE)
     save_data(mutes, MUTES_FILE)
 
-# Обработчики команд
+def schedule_cleaner():
+    while True:
+        clean_old_data()
+        time.sleep(600)
+
+cleaner_thread = threading.Thread(target=schedule_cleaner)
+cleaner_thread.daemon = True
+cleaner_thread.start()
+
 @bot.message_handler(commands=['furry'])
 def furry_cmd(message):
     if bot_state["sleeping"] and str(message.from_user.id) != str(OWNER_ID):
@@ -211,11 +207,7 @@ def show_mia_help(message):
 
 <b>🎮 Мини-игры (начинаются с Мия):</b>
 Мия кого <действие> - Выбрать случайного участника
-Мия @user <вопрос> - Задать вопрос
-
-<b>⚠️ Примечание:</b>
-• Варны/муты действуют только в текущем чате
-• Админы не могут мутить/банить друг друга
+Мия @user <вопрос> - Задать вопрос"""
 
     bot.reply_to(message, help_text, parse_mode="HTML")
 
@@ -224,7 +216,7 @@ def show_owner_help(message):
     if message.chat.type != 'private' or str(message.from_user.id) != str(OWNER_ID):
         return
     
-    help_text = """<b> Личные команды (начинаются с Мия):</b>
+    help_text = """<b>🔐 Личные команды (начинаются с Мия):</b>
 Мия спать - Спящий режим
 Мия проснись - Разбудить
 Мия, игнорируй [ответ] - Игнорировать
@@ -232,33 +224,24 @@ def show_owner_help(message):
 
 <b>👥 Админ-команды:</b>
 /listusers - Список пользователей
-/miahelp - Помощь для всех
-
-<b>⚙️ Техническая информация:</b>
-• Варны автоматически сбрасываются через N дней (N = кол-во варнов)
-• Мут снимается автоматически
-• Вы можете банить даже без прав админа"""
+/miahelp - Помощь для всех"""
     
     bot.reply_to(message, help_text, parse_mode="HTML")
 
-# Система мута
 @bot.message_handler(func=lambda message: message.text.lower().startswith("мут "))
 def mute_user(message):
     clean_old_data()
     chat_id = str(message.chat.id)
     admin_id = str(message.from_user.id)
     
-    # Проверка прав (кроме владельца бота)
     if not is_owner(chat_id, admin_id) and not is_admin(chat_id, admin_id):
         bot.reply_to(message, "Недостаточно прав")
         return
     
-    # Получаем цель мута
     target_id = None
     if message.reply_to_message:
         target_id = str(message.reply_to_message.from_user.id)
     else:
-        # Парсим команду вида "мут @user 10м"
         parts = message.text.split()
         if len(parts) >= 3 and parts[1].startswith('@'):
             username = parts[1][1:]
@@ -271,7 +254,6 @@ def mute_user(message):
         bot.reply_to(message, "Ответьте на сообщение или укажите @username")
         return
     
-    # Проверка на мута себя/владельца/админа
     if target_id == admin_id:
         bot.reply_to(message, "Нельзя замутить себя")
         return
@@ -282,7 +264,6 @@ def mute_user(message):
         bot.reply_to(message, "Нельзя замутить другого админа")
         return
     
-    # Парсим время мута
     time_match = re.search(r"(\d+)([мчд])", message.text.lower())
     if not time_match:
         bot.reply_to(message, "Неверный формат времени. Пример: 'мут 10м'")
@@ -291,7 +272,6 @@ def mute_user(message):
     amount = int(time_match.group(1))
     unit = time_match.group(2)
     
-    # Проверка лимитов
     if unit == 'м' and amount > 60:
         bot.reply_to(message, "Ошибка, максимум 60 минут")
         return
@@ -302,7 +282,6 @@ def mute_user(message):
         bot.reply_to(message, "Ошибка, максимум 7 дней")
         return
     
-    # Вычисляем время окончания мута
     if unit == 'м':
         mute_time = timedelta(minutes=amount)
     elif unit == 'ч':
@@ -312,7 +291,6 @@ def mute_user(message):
     
     mute_until = datetime.now() + mute_time
     
-    # Сохраняем мут
     if chat_id not in mutes:
         mutes[chat_id] = {}
     mutes[chat_id][target_id] = {
@@ -321,7 +299,6 @@ def mute_user(message):
     }
     save_data(mutes, MUTES_FILE)
     
-    # Применяем мут
     try:
         bot.restrict_chat_member(
             chat_id=chat_id,
@@ -333,7 +310,6 @@ def mute_user(message):
             can_add_web_page_previews=False
         )
         
-        # Формируем сообщение
         user_data = users.get(target_id, {})
         username = f"@{user_data.get('username')}" if user_data.get('username') else user_data.get('first_name', 'Пользователь')
         
@@ -351,18 +327,17 @@ def mute_user(message):
         if chat_id in mutes and target_id in mutes[chat_id]:
             del mutes[chat_id][target_id]
             save_data(mutes, MUTES_FILE)
-            @bot.message_handler(func=lambda message: message.text.lower().startswith(("размут ", "размут")))
+
+@bot.message_handler(func=lambda message: message.text.lower().startswith(("размут ", "размут")))
 def unmute_user(message):
     clean_old_data()
     chat_id = str(message.chat.id)
     admin_id = str(message.from_user.id)
     
-    # Проверка прав
     if not is_owner(chat_id, admin_id) and not is_admin(chat_id, admin_id):
         bot.reply_to(message, "Недостаточно прав")
         return
     
-    # Получаем цель
     target_id = None
     if message.reply_to_message:
         target_id = str(message.reply_to_message.from_user.id)
@@ -377,14 +352,11 @@ def unmute_user(message):
         bot.reply_to(message, "Ответьте на сообщение или укажите @username")
         return
     
-    # Проверяем, замучен ли пользователь
     if chat_id not in mutes or target_id not in mutes[chat_id]:
         bot.reply_to(message, "Пользователь не замучен")
         return
     
-    # Снимаем мут
     try:
-        # Восстанавливаем права
         bot.restrict_chat_member(
             chat_id=chat_id,
             user_id=target_id,
@@ -394,20 +366,17 @@ def unmute_user(message):
             can_add_web_page_previews=True
         )
         
-        # Удаляем из базы
         del mutes[chat_id][target_id]
         if not mutes[chat_id]:
             del mutes[chat_id]
         save_data(mutes, MUTES_FILE)
         
-        # Формируем сообщение
         user_data = users.get(target_id, {})
         username = f"@{user_data.get('username')}" if user_data.get('username') else user_data.get('first_name', 'Пользователь')
         bot.reply_to(message, f"Мут снят! {username} снова может писать")
     except Exception as e:
         bot.reply_to(message, f"Ошибка при снятии мута: {str(e)}")
 
-# Система варнов/банов (с приоритетом для владельца бота)
 @bot.message_handler(func=lambda message: message.reply_to_message and message.text.lower() == "варн")
 def warn_user(message):
     clean_old_data()
@@ -415,7 +384,6 @@ def warn_user(message):
     admin_id = str(message.from_user.id)
     target_id = str(message.reply_to_message.from_user.id)
     
-    # Проверка на варн себя/владельца
     if target_id == admin_id:
         bot.reply_to(message, "Нельзя выдать варн себе")
         return
@@ -423,14 +391,12 @@ def warn_user(message):
         bot.reply_to(message, "Неа")
         return
     
-    # Владелец бота может варнить без прав админа
     if not is_owner(chat_id, admin_id) and not is_admin(chat_id, admin_id):
         bot.reply_to(message, "Недостаточно прав")
         return
     
-    # Админы не могут варнить друг друга
     if not is_owner(chat_id, admin_id) and is_admin(chat_id, target_id):
-        bot.reply_to(message, "Нельзя выдать варн другому админу")
+        bot.reply_to(message, "Нельзя выдать варн другому админа")
         return
     
     if chat_id not in warns:
@@ -477,7 +443,6 @@ def remove_warn(message):
     target_id = str(message.reply_to_message.from_user.id)
     command = message.text.lower()
     
-    # Владелец бота может снимать без прав админа
     if not is_owner(chat_id, admin_id) and not is_admin(chat_id, admin_id):
         bot.reply_to(message, "Недостаточно прав")
         return
@@ -486,7 +451,6 @@ def remove_warn(message):
         bot.reply_to(message, "У пользователя нет варнов")
         return
     
-    # Проверка на снятие варнов владельца
     if any(w["is_owner"] and not is_owner(chat_id, admin_id) for w in warns[chat_id][target_id]["warns"]):
         bot.reply_to(message, "Не хуей")
         return
@@ -514,7 +478,6 @@ def ban_user(message):
     admin_id = str(message.from_user.id)
     target_id = str(message.reply_to_message.from_user.id)
     
-    # Проверка на бан себя/владельца
     if target_id == admin_id:
         bot.reply_to(message, "Нельзя забанить себя")
         return
@@ -522,12 +485,10 @@ def ban_user(message):
         bot.reply_to(message, "Неа")
         return
     
-    # Владелец бота может банить без прав админа
     if not is_owner(chat_id, admin_id) and not is_admin(chat_id, admin_id):
         bot.reply_to(message, "Недостаточно прав")
         return
     
-    # Админы не могут банить друг друга
     if not is_owner(chat_id, admin_id) and is_admin(chat_id, target_id):
         bot.reply_to(message, "Нельзя забанить другого админа")
         return
@@ -551,7 +512,6 @@ def unban_user(message):
     chat_id = str(message.chat.id)
     admin_id = str(message.from_user.id)
     
-    # Владелец бота может разбанивать без прав админа
     if not is_owner(chat_id, admin_id) and not is_admin(chat_id, admin_id):
         bot.reply_to(message, "Недостаточно прав")
         return
@@ -602,7 +562,6 @@ def unban_user(message):
     else:
         bot.reply_to(message, "Используйте: разбан @username или ответьте на сообщение забаненного")
 
-# Мини-игры (остаются с "Мия")
 @bot.message_handler(func=lambda message: "мия кого" in message.text.lower())
 def who_game(message):
     if bot_state["sleeping"]:
@@ -654,7 +613,6 @@ def question_game(message):
         resp = random.choice(answers)
         bot.send_message(chat_id, f"@{username}, {resp} ({question})")
 
-# Обработчик команд владельца (остается с "Мия")
 @bot.message_handler(func=lambda message: str(message.from_user.id) == str(OWNER_ID) and 
                                         message.text.lower().startswith(("мия ", "мия,")))
 def handle_owner_commands(message):
@@ -702,7 +660,6 @@ def handle_owner_commands(message):
             bot.reply_to(message, "Я всех прощаю")
         return
 
-# Обработчик извинений (меняем на "Ми")
 @bot.message_handler(func=lambda message: any(word in message.text.lower() for word in ["ми извини", "ми прости"]))
 def handle_apology(message):
     user_id = str(message.from_user.id)
@@ -728,10 +685,8 @@ def process_apology_response(message, user_id_to_forgive):
     else:
         bot.reply_to(message, "Пусть полностью поймет что потерял")
 
-# Главный обработчик текстовых сообщений (с заменой на "Ми")
 @bot.message_handler(content_types=['text'])
 def handle_text_messages(message):
-    # Проверка бана и добавление пользователя
     add_user(message.from_user)
     text_raw = message.text
     if not text_raw:
@@ -740,7 +695,6 @@ def handle_text_messages(message):
     chat_id = str(message.chat.id)
     user_id = str(message.from_user.id)
     
-    # Проверка бана
     if chat_id in bans and user_id in bans[chat_id]:
         try:
             bot.delete_message(chat_id, message.message_id)
@@ -748,7 +702,6 @@ def handle_text_messages(message):
             pass
         return
     
-    # Проверка на мут
     if chat_id in mutes and user_id in mutes[chat_id]:
         mute_until = datetime.fromisoformat(mutes[chat_id][user_id]['until'])
         if mute_until > datetime.now():
@@ -761,22 +714,18 @@ def handle_text_messages(message):
             del mutes[chat_id][user_id]
             save_data(mutes, MUTES_FILE)
     
-    # Проверка на игнор
     if user_id in bot_state["ignored_users"]:
         return
     
-    # Проверка на спящий режим (кроме команд)
     if bot_state["sleeping"] and not text_raw.startswith('/'):
         return
     
     text = clean_text(text_raw)
     
-    # Ответ на просто "Мия"
     if text == "мия":
         bot.reply_to(message, "Дааа? ▼・ᴥ・▼")
         return
     
-    # Общие ответы (с "Ми" вместо "Мия")
     general_responses = {
         "ми ты за рф": "ZOV ZOV CBO ZA НАШИХ ZOV ZOV ZOV",
         "ми ты за украину": "ПОТУЖНО ПОТУЖНО СЛАВА УКРАИНЕ СЛАВА РОССИЕ",
@@ -801,7 +750,6 @@ def handle_text_messages(message):
         "ми ты хорошая": "АХАХАХАХАХА пошел нахуй"
     }
     
-    # Нормальные ответы (с "Ми" вместо "Мия")
     normal_responses = {
         "ми иди нахуй": "Хуй слишком мал",
         "ми шлюха": "На место твоей мамы не претендую",
@@ -829,19 +777,16 @@ def handle_text_messages(message):
         "ирис соло": "Ирис еблан",
     }
     
-    # Сначала проверяем общие ответы
     for key, resp in general_responses.items():
         if key in text:
             bot.reply_to(message, resp)
             return
     
-    # Затем проверяем нормальные ответы
     for key, resp in normal_responses.items():
         if key in text:
             bot.reply_to(message, resp)
             return
     
-    # Проверка на запрещенный контент
     if "лоли" in text:
         bot.reply_to(message, "👮‍♂️")
         return
@@ -863,13 +808,12 @@ def handle_text_messages(message):
             bot.send_message(chat_id, "Осуждаю, я щас админов позову")
         return
     
-    # Ответы при реплае на бота (с "Ми" вместо "Мия")
     if message.reply_to_message and message.reply_to_message.from_user.id == bot.get_me().id:
         reply_phrases = {
             "выебать": "😘",
             "трахнуть": "❤️‍🔥",
             "делать секс": "❤️",
-            "отсосать": "Ну допустим я фута ❤️",            
+            "отсосать": "Ну допустим я фута ❤️",
             "отлизать": "😖😳",
             "изнасиловать": "Неа не прокатит, Ирис сосни хуйца",
             "пригласить на чай": "☕😄",
@@ -887,17 +831,4 @@ def handle_text_messages(message):
                 bot.reply_to(message, resp)
                 return
 
-# Автоматическая очистка данных каждые 10 минут
-def schedule_cleaner():
-    while True:
-        clean_old_data()
-        time.sleep(600)  # 10 минут
-
-# Запуск фонового потока для очистки
-import threading
-cleaner_thread = threading.Thread(target=schedule_cleaner)
-cleaner_thread.daemon = True
-cleaner_thread.start()
-
-# Запуск бота
 bot.infinity_polling()
