@@ -515,9 +515,6 @@ def handle_text_messages(message):
     text = clean_text(text_raw)
 
     # Проверка на точное слово "мия"
-    if text.strip() == "мия":
-    bot.reply_to(message, "Дааа? ▼⁠・⁠ᴥ⁠・⁠▼")
-    return
     
     chat_id = str(message.chat.id)
     user_id = str(message.from_user.id)
