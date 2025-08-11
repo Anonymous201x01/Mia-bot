@@ -503,6 +503,8 @@ def question_game(message):
         bot.send_message(chat_id, f"@{username}, {resp} ({question})")
 
 # Текстовые триггеры
+# ... (предыдущий код остается без изменений до функции handle_text_messages)
+
 @bot.message_handler(func=lambda message: True)
 def handle_text_messages(message):
     # Проверка на бан и добавление пользователя
@@ -530,10 +532,12 @@ def handle_text_messages(message):
     if bot_state["sleeping"] and not text_raw.startswith('/'):
         return
     
-    text = clean_text(text_raw)
+    # Приводим текст к нижнему регистру и чистим от лишних символов
+    cleaned_text = clean_text(text_raw)
     active_chats[chat_id] = time.time()
 
-    general_responses = {
+    # Сначала проверяем точные совпадения
+    exact_responses = {
         "мия ты за рф": "ZOV ZOV CBO ZA НАШИХ ZOV ZOV ZOV",
         "мия ты за украину": "ПОТУЖНО ПОТУЖНО СЛАВА УКРАИНЕ СЛАВА РОССИЕ",
         "мия хуже ириса": "Ну вот и ебись с ним",
@@ -554,10 +558,7 @@ def handle_text_messages(message):
         "мия кто твой отец": "Я сирота... Шучу , мой друг Пубертатник ;)",
         "мия ты фурри": " Фурри? Фу. Да я фурри",
         "мия кто твоя мама": "Зачем мне мама? Хотя можешь ей быть если хочешь",
-        "мия ты хорошая": "АХАХАХАХАХА пошел нахуй"
-    }
-
-    normal_responses = {
+        "мия ты хорошая": "АХАХАХАХАХА пошел нахуй",
         "мия иди нахуй": "Хуй слишком мал",
         "мия шлюха": "На место твоей мамы не претендую",
         "мия сука": "Гав гав",
@@ -583,6 +584,10 @@ def handle_text_messages(message):
         "ирис соло": "Ирис еблан",
     }
 
+    # Проверяем точные совпадения
+    if cleaned_text in exact_responses:
+        bot.reply_to(message, exact_responses[cleaned_text])
+        return
     for key, resp in general_responses.items():
         if key in text:
             bot.reply_to(message, resp)
