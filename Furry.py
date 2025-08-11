@@ -206,7 +206,7 @@ def show_mia_help(message):
 [ответ] мут Xм - Мут на X минут (макс. 60)
 [ответ] мут Xч - Мут на X часов (макс. 24)
 [ответ] мут Xд - Мут на X дней (макс. 7)
-Пример: "мут 30м" - мут на 30 минут
+[ответ] размут - Снять мут досрочно
 
 <b>🎮 Мини-игры (начинаются с Мия):</b>
 Мия кого <действие> - Выбрать случайного участника
@@ -215,7 +215,6 @@ def show_mia_help(message):
 <b>⚠️ Примечание:</b>
 • Варны/муты действуют только в текущем чате
 • Админы не могут мутить/банить друг друга
-• Владелец бота (@ваш_юзернейм) может банить даже без прав админа"""
 
     bot.reply_to(message, help_text, parse_mode="HTML")
 
@@ -351,6 +350,61 @@ def mute_user(message):
         if chat_id in mutes and target_id in mutes[chat_id]:
             del mutes[chat_id][target_id]
             save_data(mutes, MUTES_FILE)
+            @bot.message_handler(func=lambda message: message.text.lower().startswith(("размут ", "размут")))
+def unmute_user(message):
+    clean_old_data()
+    chat_id = str(message.chat.id)
+    admin_id = str(message.from_user.id)
+    
+    # Проверка прав
+    if not is_owner(chat_id, admin_id) and not is_admin(chat_id, admin_id):
+        bot.reply_to(message, "Недостаточно прав")
+        return
+    
+    # Получаем цель
+    target_id = None
+    if message.reply_to_message:
+        target_id = str(message.reply_to_message.from_user.id)
+    elif len(message.text.split()) > 1:
+        username = message.text.split()[1].strip('@')
+        for uid, user_data in users.items():
+            if user_data.get('username', '').lower() == username.lower():
+                target_id = uid
+                break
+    
+    if not target_id:
+        bot.reply_to(message, "Ответьте на сообщение или укажите @username")
+        return
+    
+    # Проверяем, замучен ли пользователь
+    if chat_id not in mutes or target_id not in mutes[chat_id]:
+        bot.reply_to(message, "Пользователь не замучен")
+        return
+    
+    # Снимаем мут
+    try:
+        # Восстанавливаем права
+        bot.restrict_chat_member(
+            chat_id=chat_id,
+            user_id=target_id,
+            can_send_messages=True,
+            can_send_media_messages=True,
+            can_send_other_messages=True,
+            can_add_web_page_previews=True
+        )
+        
+        # Удаляем из базы
+        del mutes[chat_id][target_id]
+        if not mutes[chat_id]:
+            del mutes[chat_id]
+        save_data(mutes, MUTES_FILE)
+        
+        # Формируем сообщение
+        user_data = users.get(target_id, {})
+        username = f"@{user_data.get('username')}" if user_data.get('username') else user_data.get('first_name', 'Пользователь')
+        bot.reply_to(message, f"Мут снят! {username} снова может писать")
+    except Exception as e:
+        bot.reply_to(message, f"Ошибка при снятии мута: {str(e)}")
 
 # Система варнов/банов (с приоритетом для владельца бота)
 @bot.message_handler(func=lambda message: message.reply_to_message and message.text.lower() == "варн")
