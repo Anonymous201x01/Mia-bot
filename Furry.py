@@ -115,280 +115,7 @@ def clean_old_warns():
             del warns[chat_id]
     save_data(warns, WARNS_FILE)
 
-# Главный обработчик текстовых сообщений (ДОЛЖЕН БЫТЬ ПЕРВЫМ!)
-@bot.message_handler(content_types=['text'], func=lambda message: True)
-def handle_text_messages(message):
-    # Проверка бана и добавление пользователя
-    add_user(message.from_user)
-    text_raw = message.text.strip()
-    if not text_raw:
-        return
-    
-    chat_id = str(message.chat.id)
-    user_id = str(message.from_user.id)
-    
-    # Проверка бана
-    if chat_id in bans and user_id in bans[chat_id]:
-        try:
-            bot.delete_message(chat_id, message.message_id)
-        except:
-            pass
-        return
-    
-    # Проверка на игнор
-    if user_id in bot_state["ignored_users"]:
-        return
-    
-    # Проверка на спящий режим (кроме команд)
-    if bot_state["sleeping"] and not text_raw.startswith('/'):
-        return
-    
-    text_lower = text_raw.lower()
-    text_clean = clean_text(text_raw)
-    
-    # Ответ на просто "Мия"
-    if text_lower == "мия":
-        bot.reply_to(message, "Дааа? ▼・ᴥ・▼")
-        return
-    
-    # Общие ответы
-    general_responses = {
-        "мия ты за рф": "ZOV ZOV CBO ZA НАШИХ ZOV ZOV ZOV",
-        "мия ты за украину": "ПОТУЖНО ПОТУЖНО СЛАВА УКРАИНЕ СЛАВА РОССИЕ",
-        "мия хуже ириса": "Ну вот и ебись с ним",
-        "мия лучше ириса": ":)",
-        "мия сколько тебе лет": "Не волнуйся, тебя посадят",
-        "мия ты девочка": "С виду да",
-        "мия ты мальчик": "Мимо",
-        "мия ты человек": " ) ",
-        "мия привет": "Привет!",
-        "мия пока": "Пока пока~",
-        "мия спокойной ночи": "Сладких снов мой хороший/ая, спи спокойно",
-        "мия доброе утро": "Доброе утро! Если сейчас утро",
-        "мия давай дружить": "Мы уже дружим",
-        "мия я тебе нравлюсь": "Конечно пупсик",
-        "мия какой твой любимый цвет": "Розовый",
-        "мия какая твоя любимая еда": "Вкусная",
-        "мия ты спишь": "Тот же вопрос тебе",
-        "мия кто твой отец": "Я сирота... Шучу , мой друг Пубертатник ;)",
-        "мия ты фурри": " Фурри? Фу. Да я фурри",
-        "мия кто твоя мама": "Зачем мне мама? Хотя можешь ей быть если хочешь",
-        "мия ты хорошая": "АХАХАХАХАХА пошел нахуй"
-    }
-    
-    # Проверяем общие ответы
-    for key, resp in general_responses.items():
-        if key in text_clean:
-            bot.reply_to(message, resp)
-            return
-    
-    # Нормальные ответы
-    normal_responses = {
-        "мия иди нахуй": "Хуй слишком мал",
-        "мия шлюха": "На место твоей мамы не претендую",
-        "мия сука": "Гав гав",
-        "мия лучшая": "Спасибочки❤️",
-        "мия давай встречаться": "Рановато",
-        "мия ты выйдешь за меня": "Ого",
-        "мия гитлер": "Нихуя себе",
-        "ирис еблан": "По факту",
-        "ирис ебан": "По факту",
-        "мия как у тебя дела": "Всё хорошо",
-        "мия ты натурал": "Сам как думаешь?",
-        "я думаю да": "Пизда",
-        "да": "Пизда",
-        "нет": "Пидора ответ",
-        "шлюхи аргумент": "Ты думаешь бот будет продолжать цепочку до конца ? Неа",
-        "мия я тебя люблю": "❤️",
-        "мия ты бот": "Шахматный",
-        "мия го секс": "К сожалению или к счастью я не могу заниматься этим",
-        "мия сколько будет 2+2": "5",
-        "мия ты админ": "Поцеловауй мои ноги, может не забаню",
-        "поцеловал ноги мии": "Я польщена",
-        "ирис лучший": "Из худших",
-        "айзен соло": "У Айзена фанатов айкью диких приматов",
-        "ирис соло": "Ирис еблан",
-    }
-    
-    # Проверяем нормальные ответы
-    for key, resp in normal_responses.items():
-        if key in text_clean:
-            bot.reply_to(message, resp)
-            return
-    
-    # Проверка на запрещенный контент
-    if "лоли" in text_clean:
-        bot.reply_to(message, "👮‍♂️")
-        return
-    
-    cp_triggers = ["цп", "cp", "child porn", "детское порно", "детская порнография", "детский порн"]
-    if any(trigger in text_clean for trigger in cp_triggers):
-        try:
-            admins = bot.get_chat_administrators(chat_id)
-            mentions = []
-            for admin in admins:
-                user = admin.user
-                if user.username:
-                    mentions.append(f"@{user.username}")
-                else:
-                    mentions.append(user.first_name)
-            mention_text = " ".join(mentions)
-            bot.send_message(chat_id, f"Осуждаю, я щас админов позову: {mention_text}")
-        except Exception:
-            bot.send_message(chat_id, "Осуждаю, я щас админов позову")
-        return
-    
-    # Ответы при реплае на бота
-    if message.reply_to_message and message.reply_to_message.from_user.id == bot.get_me().id:
-        reply_phrases = {
-            "выебать": "😘",
-            "трахнуть": "❤️‍🔥",
-            "делать секс": "❤️",
-            "отсосать": "Ну допустим я фута ❤️",
-            "отлизать": "😖😳",
-            "изнасиловать": "Неа не прокатит, Ирис сосни хуйца",
-            "пригласить на чай": "☕😄",
-            "расстрелять": "**Воскресла**",
-            "сжечь": "**возродилась**",
-            "убить": "**ожила**",
-            "ты бессмертна": "ага",
-            "покажи сиськи": "Я стесняюсь ⊙⁠﹏⁠⊙",
-            "покажи член": "Слишком большой, в кадр не поместится",
-            "покажи ножки": "Фетишист",
-        }
-        
-        for key, resp in reply_phrases.items():
-            if key in text_clean:
-                bot.reply_to(message, resp)
-                return
-
-# Обработчики команд владельца
-@bot.message_handler(func=lambda message: str(message.from_user.id) == str(OWNER_ID) and 
-                                        message.text.lower().startswith(("мия ", "мия,")))
-def handle_owner_commands(message):
-    text = message.text.lower()
-    chat_id = message.chat.id
-    
-    if "спать" in text:
-        if bot_state["sleeping"]:
-            bot.reply_to(message, "...")
-        else:
-            bot_state["sleeping"] = True
-            save_data(bot_state, STATE_FILE)
-            bot.reply_to(message, "Приказ поняла, сладких мне снов")
-        return
-    
-    if "проснись" in text:
-        if not bot_state["sleeping"]:
-            bot.reply_to(message, "Я и не спала")
-        else:
-            bot_state["sleeping"] = False
-            save_data(bot_state, STATE_FILE)
-            bot.reply_to(message, "Уже! Я снова в строю")
-        return
-    
-    if "игнорируй" in text and message.reply_to_message:
-        user_id = str(message.reply_to_message.from_user.id)
-        if user_id in bot_state["ignored_users"]:
-            bot.reply_to(message, "Он до сих пор не извинился")
-        else:
-            bot_state["ignored_users"].append(user_id)
-            save_data(bot_state, STATE_FILE)
-            user_name = message.reply_to_message.from_user.first_name
-            if message.reply_to_message.from_user.username:
-                user_name = f"@{message.reply_to_message.from_user.username}"
-            reply = bot_state["owner_commands"]["игнорируй"].format(user=user_name)
-            bot.reply_to(message, reply)
-        return
-    
-    if "забудь обиды" in text:
-        if not bot_state["ignored_users"]:
-            bot.reply_to(message, "Я не обижаюсь 😄")
-        else:
-            bot_state["ignored_users"] = []
-            save_data(bot_state, STATE_FILE)
-            bot.reply_to(message, "Я всех прощаю")
-        return
-
-# Обработчик извинений
-@bot.message_handler(func=lambda message: any(word in message.text.lower() for word in ["мия извини", "мия прости"]))
-def handle_apology(message):
-    user_id = str(message.from_user.id)
-    chat_id = message.chat.id
-    
-    if user_id not in bot_state["ignored_users"]:
-        bot.reply_to(message, "За что? Все хорошо.")
-        return
-    
-    owner_mention = f"<a href='tg://user?id={OWNER_ID}'>Владелец</a>"
-    msg = bot.reply_to(message, f"{owner_mention}, прощать?", parse_mode="HTML")
-    bot.register_next_step_handler(msg, process_apology_response, user_id)
-
-def process_apology_response(message, user_id_to_forgive):
-    if str(message.from_user.id) != str(OWNER_ID):
-        return
-    
-    if message.text.lower() == "да":
-        if user_id_to_forgive in bot_state["ignored_users"]:
-            bot_state["ignored_users"].remove(user_id_to_forgive)
-            save_data(bot_state, STATE_FILE)
-        bot.reply_to(message, "Я больше не обижаюсь!")
-    else:
-        bot.reply_to(message, "Пусть полностью поймет что потерял")
-
-# Мини-игры
-@bot.message_handler(func=lambda message: "мия кого" in message.text.lower())
-def who_game(message):
-    if bot_state["sleeping"]:
-        return
-    
-    chat_id = message.chat.id
-    match = re.search(r"кого\s*<(.+?)>", message.text, re.IGNORECASE)
-    
-    if match:
-        phrase = match.group(1).strip()
-        try:
-            members = []
-            offset = 0
-            while True:
-                chat_members = bot.get_chat_members(chat_id, offset=offset, limit=100)
-                if not chat_members:
-                    break
-                members.extend([m.user for m in chat_members])
-                offset += 100
-            
-            if members:
-                member = random.choice(members)
-                name = member.first_name
-                if member.username:
-                    name += f" (@{member.username})"
-                bot.send_message(chat_id, f"{name} а/у {phrase}")
-            else:
-                bot.send_message(chat_id, "Не могу найти участников")
-        except Exception as e:
-            print(f"Ошибка в 'кого': {e}")
-            bot.send_message(chat_id, "Ошибка при поиске участников")
-
-@bot.message_handler(func=lambda message: message.text.lower().startswith("мия @"))
-def question_game(message):
-    if bot_state["sleeping"]:
-        return
-    
-    chat_id = message.chat.id
-    match = re.search(r"@(\w+)\s*<(.+?)>", message.text, re.IGNORECASE)
-    
-    if match:
-        username = match.group(1).strip()
-        question = match.group(2).strip()
-        answers = [
-            "Да", "Нет", "Наверное", "Вряд ли", 
-            "100%", "Абсолютно точно", "Ни в коем случае",
-            "Спросите позже", "Это секрет", "Ясно дело!"
-        ]
-        resp = random.choice(answers)
-        bot.send_message(chat_id, f"@{username}, {resp} ({question})")
-
-# Команды для артов
+# Обработчики команд
 @bot.message_handler(commands=['furry'])
 def furry_cmd(message):
     if bot_state["sleeping"] and str(message.from_user.id) != str(OWNER_ID):
@@ -409,7 +136,6 @@ def furry_cmd(message):
                 bot.send_photo(chat_id, f)
         active_chats[chat_id] = time.time()
 
-# Админ-команды
 @bot.message_handler(commands=['listusers'])
 def list_users_command(message):
     if message.from_user.id != OWNER_ID:
@@ -433,21 +159,31 @@ def list_users_command(message):
 
 @bot.message_handler(commands=['miahelp'])
 def show_mia_help(message):
-    help_text = """<b>Доступные команды для всех:</b>
-/furry - Получить случайный фурри-арт
-/furry N - Получить N артов (макс. 15)
+    help_text = """<b>📚 Система обращений:</b>
+• Для команд и мини-игр используйте "Мия"
+• Для обычных фраз используйте "Ми"
 
-<b>Мини-игры:</b>
+<b>🖼 Команды для артов:</b>
+/furry - Случайный фурри-арт
+/furry N - Несколько артов (макс. 15)
+
+<b>🎮 Мини-игры (начинаются с Мия):</b>
 Мия кого <действие> - Выбрать случайного участника
 Мия @username <вопрос> - Задать вопрос
 
-<b>Команды для админов:</b>
-[ответ] варн - Выдать предупреждение
+<b>⚖️ Команды модерации:</b>
+[ответ] варн - Предупреждение
 [ответ] снять варн - Снять 1 варн
 [ответ] снять варны - Снять все варны
 [ответ] бан - Забанить
-разбан @username - Разбанить"""
-    
+разбан @username - Разбанить
+
+<b>💬 Примеры фраз с "Ми":</b>
+• Ми привет
+• Ми лучшая
+• Ми как дела
+• Ми ты фурри"""
+
     bot.reply_to(message, help_text, parse_mode="HTML")
 
 @bot.message_handler(commands=['help'])
@@ -455,19 +191,24 @@ def show_owner_help(message):
     if message.chat.type != 'private' or str(message.from_user.id) != str(OWNER_ID):
         return
     
-    help_text = """<b>Личные команды:</b>
+    help_text = """<b>🔐 Личные команды (начинаются с Мия):</b>
 Мия спать - Спящий режим
 Мия проснись - Разбудить
 Мия, игнорируй [ответ] - Игнорировать
 Мия забудь обиды - Простить всех
 
-<b>Админ-команды:</b>
+<b>👥 Админ-команды:</b>
 /listusers - Список пользователей
-/miahelp - Помощь для всех"""
-    
+/miahelp - Помощь для всех
+
+<b>⚙️ Техническая информация:</b>
+• Обычные фразы работают с "Ми"
+• Команды и мини-игры - с "Мия"
+• Система игнора требует подтверждения владельца"""
+
     bot.reply_to(message, help_text, parse_mode="HTML")
 
-# Система варнов/банов
+# Обработчики модерации
 @bot.message_handler(func=lambda message: message.reply_to_message and message.text.lower() == "варн")
 def warn_user(message):
     clean_old_warns()
@@ -636,5 +377,277 @@ def unban_user(message):
             bot.reply_to(message, f"Ошибка при поиске пользователя: {str(e)}")
     else:
         bot.reply_to(message, "Используйте: разбан @username или ответьте на сообщение забаненного")
+
+# Мини-игры (остаются с "Мия")
+@bot.message_handler(func=lambda message: "мия кого" in message.text.lower())
+def who_game(message):
+    if bot_state["sleeping"]:
+        return
+    
+    chat_id = message.chat.id
+    match = re.search(r"кого\s*<(.+?)>", message.text, re.IGNORECASE)
+    
+    if match:
+        phrase = match.group(1).strip()
+        try:
+            members = []
+            offset = 0
+            while True:
+                chat_members = bot.get_chat_members(chat_id, offset=offset, limit=100)
+                if not chat_members:
+                    break
+                members.extend([m.user for m in chat_members])
+                offset += 100
+            
+            if members:
+                member = random.choice(members)
+                name = member.first_name
+                if member.username:
+                    name += f" (@{member.username})"
+                bot.send_message(chat_id, f"{name} а/у {phrase}")
+            else:
+                bot.send_message(chat_id, "Не могу найти участников")
+        except Exception as e:
+            print(f"Ошибка в 'кого': {e}")
+            bot.send_message(chat_id, "Ошибка при поиске участников")
+
+@bot.message_handler(func=lambda message: message.text.lower().startswith("мия @"))
+def question_game(message):
+    if bot_state["sleeping"]:
+        return
+    
+    chat_id = message.chat.id
+    match = re.search(r"@(\w+)\s*<(.+?)>", message.text, re.IGNORECASE)
+    
+    if match:
+        username = match.group(1).strip()
+        question = match.group(2).strip()
+        answers = [
+            "Да", "Нет", "Наверное", "Вряд ли", 
+            "100%", "Абсолютно точно", "Ни в коем случае",
+            "Спросите позже", "Это секрет", "Ясно дело!"
+        ]
+        resp = random.choice(answers)
+        bot.send_message(chat_id, f"@{username}, {resp} ({question})")
+
+# Обработчик команд владельца (остается с "Мия")
+@bot.message_handler(func=lambda message: str(message.from_user.id) == str(OWNER_ID) and 
+                                        message.text.lower().startswith(("мия ", "мия,")))
+def handle_owner_commands(message):
+    text = message.text.lower()
+    chat_id = message.chat.id
+    
+    if "спать" in text:
+        if bot_state["sleeping"]:
+            bot.reply_to(message, "...")
+        else:
+            bot_state["sleeping"] = True
+            save_data(bot_state, STATE_FILE)
+            bot.reply_to(message, "Приказ поняла, сладких мне снов")
+        return
+    
+    if "проснись" in text:
+        if not bot_state["sleeping"]:
+            bot.reply_to(message, "Я и не спала")
+        else:
+            bot_state["sleeping"] = False
+            save_data(bot_state, STATE_FILE)
+            bot.reply_to(message, "Уже! Я снова в строю")
+        return
+    
+    if "игнорируй" in text and message.reply_to_message:
+        user_id = str(message.reply_to_message.from_user.id)
+        if user_id in bot_state["ignored_users"]:
+            bot.reply_to(message, "Он до сих пор не извинился")
+        else:
+            bot_state["ignored_users"].append(user_id)
+            save_data(bot_state, STATE_FILE)
+            user_name = message.reply_to_message.from_user.first_name
+            if message.reply_to_message.from_user.username:
+                user_name = f"@{message.reply_to_message.from_user.username}"
+            reply = bot_state["owner_commands"]["игнорируй"].format(user=user_name)
+            bot.reply_to(message, reply)
+        return
+    
+    if "забудь обиды" in text:
+        if not bot_state["ignored_users"]:
+            bot.reply_to(message, "Я не обижаюсь 😄")
+        else:
+            bot_state["ignored_users"] = []
+            save_data(bot_state, STATE_FILE)
+            bot.reply_to(message, "Я всех прощаю")
+        return
+
+# Обработчик извинений (меняем на "Ми")
+@bot.message_handler(func=lambda message: any(word in message.text.lower() for word in ["ми извини", "ми прости"]))
+def handle_apology(message):
+    user_id = str(message.from_user.id)
+    chat_id = message.chat.id
+    
+    if user_id not in bot_state["ignored_users"]:
+        bot.reply_to(message, "За что? Все хорошо.")
+        return
+    
+    owner_mention = f"<a href='tg://user?id={OWNER_ID}'>Владелец</a>"
+    msg = bot.reply_to(message, f"{owner_mention}, прощать?", parse_mode="HTML")
+    bot.register_next_step_handler(msg, process_apology_response, user_id)
+
+def process_apology_response(message, user_id_to_forgive):
+    if str(message.from_user.id) != str(OWNER_ID):
+        return
+    
+    if message.text.lower() == "да":
+        if user_id_to_forgive in bot_state["ignored_users"]:
+            bot_state["ignored_users"].remove(user_id_to_forgive)
+            save_data(bot_state, STATE_FILE)
+        bot.reply_to(message, "Я больше не обижаюсь!")
+    else:
+        bot.reply_to(message, "Пусть полностью поймет что потерял")
+
+# Главный обработчик текстовых сообщений (с заменой на "Ми")
+@bot.message_handler(content_types=['text'])
+def handle_text_messages(message):
+    # Проверка бана и добавление пользователя
+    add_user(message.from_user)
+    text_raw = message.text
+    if not text_raw:
+        return
+    
+    chat_id = str(message.chat.id)
+    user_id = str(message.from_user.id)
+    
+    # Проверка бана
+    if chat_id in bans and user_id in bans[chat_id]:
+        try:
+            bot.delete_message(chat_id, message.message_id)
+        except:
+            pass
+        return
+    
+    # Проверка на игнор
+    if user_id in bot_state["ignored_users"]:
+        return
+    
+    # Проверка на спящий режим (кроме команд)
+    if bot_state["sleeping"] and not text_raw.startswith('/'):
+        return
+    
+    text = clean_text(text_raw)
+    
+    # Ответ на просто "Мия"
+    if text == "мия":
+        bot.reply_to(message, "Дааа? ▼・ᴥ・▼")
+        return
+    
+    # Общие ответы (с "Ми" вместо "Мия")
+    general_responses = {
+        "ми ты за рф": "ZOV ZOV CBO ZA НАШИХ ZOV ZOV ZOV",
+        "ми ты за украину": "ПОТУЖНО ПОТУЖНО СЛАВА УКРАИНЕ СЛАВА РОССИЕ",
+        "ми хуже ириса": "Ну вот и ебись с ним",
+        "ми лучше ириса": ":)",
+        "ми сколько тебе лет": "Не волнуйся, тебя посадят",
+        "ми ты девочка": "С виду да",
+        "ми ты мальчик": "Мимо",
+        "ми ты человек": " ) ",
+        "ми привет": "Привет!",
+        "ми пока": "Пока пока~",
+        "ми спокойной ночи": "Сладких снов мой хороший/ая, спи спокойно",
+        "ми доброе утро": "Доброе утро! Если сейчас утро",
+        "ми давай дружить": "Мы уже дружим",
+        "ми я тебе нравлюсь": "Конечно пупсик",
+        "ми какой твой любимый цвет": "Розовый",
+        "ми какая твоя любимая еда": "Вкусная",
+        "ми ты спишь": "Тот же вопрос тебе",
+        "ми кто твой отец": "Я сирота... Шучу , мой друг Пубертатник ;)",
+        "ми ты фурри": " Фурри? Фу. Да я фурри",
+        "ми кто твоя мама": "Зачем мне мама? Хотя можешь ей быть если хочешь",
+        "ми ты хорошая": "АХАХАХАХАХА пошел нахуй"
+    }
+    
+    # Нормальные ответы (с "Ми" вместо "Мия")
+    normal_responses = {
+        "ми иди нахуй": "Хуй слишком мал",
+        "ми шлюха": "На место твоей мамы не претендую",
+        "ми сука": "Гав гав",
+        "ми лучшая": "Спасибочки❤️",
+        "ми давай встречаться": "Рановато",
+        "ми ты выйдешь за меня": "Ого",
+        "ми гитлер": "Нихуя себе",
+        "ирис еблан": "По факту",
+        "ирис ебан": "По факту",
+        "ми как у тебя дела": "Всё хорошо",
+        "ми ты натурал": "Сам как думаешь?",
+        "я думаю да": "Пизда",
+        "да": "Пизда",
+        "нет": "Пидора ответ",
+        "шлюхи аргумент": "Ты думаешь бот будет продолжать цепочку до конца ? Неа",
+        "ми я тебя люблю": "❤️",
+        "ми ты бот": "Шахматный",
+        "ми го секс": "К сожалению или к счастью я не могу заниматься этим",
+        "ми сколько будет 2+2": "5",
+        "ми ты админ": "Поцеловауй мои ноги, может не забаню",
+        "поцеловал ноги мии": "Я польщена",
+        "ирис лучший": "Из худших",
+        "айзен соло": "У Айзена фанатов айкью диких приматов",
+        "ирис соло": "Ирис еблан",
+    }
+    
+    # Сначала проверяем общие ответы
+    for key, resp in general_responses.items():
+        if key in text:
+            bot.reply_to(message, resp)
+            return
+    
+    # Затем проверяем нормальные ответы
+    for key, resp in normal_responses.items():
+        if key in text:
+            bot.reply_to(message, resp)
+            return
+    
+    # Проверка на запрещенный контент
+    if "лоли" in text:
+        bot.reply_to(message, "👮‍♂️")
+        return
+    
+    cp_triggers = ["цп", "cp", "child porn", "детское порно", "детская порнография", "детский порн"]
+    if any(trigger in text for trigger in cp_triggers):
+        try:
+            admins = bot.get_chat_administrators(chat_id)
+            mentions = []
+            for admin in admins:
+                user = admin.user
+                if user.username:
+                    mentions.append(f"@{user.username}")
+                else:
+                    mentions.append(user.first_name)
+            mention_text = " ".join(mentions)
+            bot.send_message(chat_id, f"Осуждаю, я щас админов позову: {mention_text}")
+        except Exception:
+            bot.send_message(chat_id, "Осуждаю, я щас админов позову")
+        return
+    
+    # Ответы при реплае на бота (с "Ми" вместо "Мия")
+    if message.reply_to_message and message.reply_to_message.from_user.id == bot.get_me().id:
+        reply_phrases = {
+            "выебать": "😘",
+            "трахнуть": "❤️‍🔥",
+            "делать секс": "❤️",
+            "отсосать": "Ну допустим я фута ❤️",
+            "отлизать": "😖😳",
+            "изнасиловать": "Неа не прокатит, Ирис сосни хуйца",
+            "пригласить на чай": "☕😄",
+            "расстрелять": "**Воскресла**",
+            "сжечь": "**возродилась**",
+            "убить": "**ожила**",
+            "ты бессмертна": "ага",
+            "покажи сиськи": "Я стесняюсь ⊙⁠﹏⁠⊙",
+            "покажи член": "Слишком большой, в кадр не поместится",
+            "покажи ножки": "Фетишист",
+        }
+        
+        for key, resp in reply_phrases.items():
+            if key in text:
+                bot.reply_to(message, resp)
+                return
 
 bot.infinity_polling()
