@@ -510,6 +510,14 @@ def handle_text_messages(message):
     text_raw = message.text
     if not text_raw:
         return
+
+    # Нормализуем текст (убираем лишние пробелы и приводим к нижнему регистру)
+    text = clean_text(text_raw)
+
+    # Проверка на точное слово "мия"
+    if text == "мия":
+        bot.reply_to(message, "Дааа? ▼⁠・⁠ᴥ⁠・⁠▼")
+        return
     
     chat_id = str(message.chat.id)
     user_id = str(message.from_user.id)
@@ -581,7 +589,6 @@ def handle_text_messages(message):
         "ирис лучший": "Из худших",
         "айзен соло": "У Айзена фанатов айкью диких приматов",
         "ирис соло": "Ирис еблан",
-        "мия": "Даааа? ▼⁠・⁠ᴥ⁠・⁠▼"
     }
 
     for key, resp in general_responses.items():
