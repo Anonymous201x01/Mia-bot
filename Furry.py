@@ -507,6 +507,7 @@ def question_game(message):
 
 @bot.message_handler(func=lambda message: True)
 def handle_text_messages(message):
+  bot.send_message(chat_id, "Обработчик сработал")
     # Проверка на бан и добавление пользователя
     add_user(message.from_user)
     text_raw = message.text
