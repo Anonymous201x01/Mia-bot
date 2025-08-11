@@ -510,11 +510,6 @@ def handle_text_messages(message):
     text_raw = message.text
     if not text_raw:
         return
-
-    # Нормализуем текст (убираем лишние пробелы и приводим к нижнему регистру)
-    text = clean_text(text_raw)
-
-    # Проверка на точное слово "мия"
     
     chat_id = str(message.chat.id)
     user_id = str(message.from_user.id)
@@ -614,7 +609,7 @@ def handle_text_messages(message):
                 else:
                     mentions.append(user.first_name)
             mention_text = " ".join(mentions)
-            bot.send_message(chat_id, f"Осуждаю, зову админов: {mention_text}")
+            bot.send_message(chat_id, f"Осуждаю, я щас админов позову: {mention_text}")
         except Exception:
             bot.send_message(chat_id, "Осуждаю, я щас админов позову")
         return
