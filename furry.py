@@ -12,4 +12,5 @@ def start(message):
 def hello(message):
     bot.reply_to(message, "Привет!")
 
-bot.polling(non_stop=True)
+if __name__ == "__main__":
+    bot.polling(none_stop=True)
