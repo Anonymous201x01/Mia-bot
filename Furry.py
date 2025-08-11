@@ -507,16 +507,18 @@ def question_game(message):
 
 @bot.message_handler(func=lambda message: True)
 def handle_text_messages(message):
-  bot.send_message(chat_id, "Обработчик сработал")
+    chat_id = str(message.chat.id)
+
+    bot.send_message(chat_id, "Обработчик сработал")  # <-- вставь сюда, сразу в начало функции
+
     # Проверка на бан и добавление пользователя
     add_user(message.from_user)
     text_raw = message.text
     if not text_raw:
         return
-    
-    chat_id = str(message.chat.id)
+
     user_id = str(message.from_user.id)
-    
+
     # Проверка бана
     if chat_id in bans and user_id in bans[chat_id]:
         try:
@@ -524,18 +526,20 @@ def handle_text_messages(message):
         except:
             pass
         return
-    
+
     # Проверка на игнор
     if user_id in bot_state["ignored_users"]:
         return
-    
+
     # Проверка на спящий режим (кроме команд)
     if bot_state["sleeping"] and not text_raw.startswith('/'):
         return
-    
+
     # Приводим текст к нижнему регистру и чистим от лишних символов
     cleaned_text = clean_text(text_raw)
     active_chats[chat_id] = time.time()
+
+    # Остальной код...
     print(f"cleaned_text:'{cleaned_text}'")
     # Сначала проверяем точные совпадения
     exact_responses = {
