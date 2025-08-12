@@ -65,7 +65,9 @@ WARN_MESSAGES = {
 }
 
 def update_last_activity(chat_id):
-    last_activity[str(chat_id)] = time.time()
+    if str(chat_id) not in last_activity:
+        last_activity[str(chat_id)] = {}
+    last_activity[str(chat_id)]["last_time"] = time.time()
     save_data(last_activity, LAST_ACTIVITY_FILE)
 
 def auto_send_arts():
@@ -73,10 +75,13 @@ def auto_send_arts():
         current_time = time.time()
         for chat_id_str in list(last_activity.keys()):
             chat_id = int(chat_id_str)
-            if current_time - last_activity[chat_id_str] >= AUTO_ART_INTERVAL:
-                if not bot_state["sleeping"]:
-                    send_art(chat_id)
-                update_last_activity(chat_id)
+            chat_info = bot.get_chat(chat_id)
+            # Проверяем, что это групповой чат, а не ЛС
+            if chat_info.type in ['group', 'supergroup']:
+                if current_time - last_activity[chat_id_str]["last_time"] >= AUTO_ART_INTERVAL:
+                    if not bot_state["sleeping"]:
+                        send_art(chat_id)
+                    update_last_activity(chat_id)
         time.sleep(60)
 
 auto_send_thread = threading.Thread(target=auto_send_arts)
@@ -208,7 +213,7 @@ def list_users_command(message):
     bot.reply_to(message, "\n".join(text_lines))
     update_last_activity(message.chat.id)
 
-@bot.message_handler(commands=['mihelp'], priority=10)  # Высокий приоритет
+@bot.message_handler(commands=['miahelp'])
 def show_mia_help(message):
     help_text = """<b>📚 Система обращений:</b>
 • Для команд и мини-игр используйте "Мия"
@@ -835,18 +840,15 @@ def handle_text_messages(message):
         try:
             admins = bot.get_chat_administrators(chat_id)
             mentions = []
-            for admin in admins:
-                user = admin.user
-                if user.username:
-                    mentions.append(f"@{user.username}")
-                else:
-                    mentions.append(user.first_name)
+            for admin in admins
+                        mentions.append(f"@{admin.user.username}" if admin.user.username else admin.user.first_name)
             mention_text = " ".join(mentions)
-            bot.send_message(chat_id, f"Осуждаю, я щас админов позову: {mention_text}")
-        except Exception:
-                        bot.send_message(chat_id, "Осуждаю, я щас админов позову")
+            bot.send_message(chat_id, f"Осуждаю! Админы, внимание: {mention_text}")
+        except Exception as e:
+            print(f"Ошибка при вызове админов: {e}")
+            bot.send_message(chat_id, "Осуждаю! Админы, проверьте чат!")
         return
-    
+
     if message.reply_to_message and message.reply_to_message.from_user.id == bot.get_me().id:
         reply_phrases = {
             "выебать": "😘",
@@ -860,11 +862,11 @@ def handle_text_messages(message):
             "сжечь": "**возродилась**",
             "убить": "**ожила**",
             "ты бессмертна": "ага",
-            "покажи сиськи": "Я стесняюсь ⊙⁠﹏⁠⊙",
+            "покажи сиськи": "Я стесняюсь ⊙﹏⊙",
             "покажи член": "Слишком большой, в кадр не поместится",
             "покажи ножки": "Фетишист",
         }
-        
+
         for key, resp in reply_phrases.items():
             if key in text:
                 bot.reply_to(message, resp)
