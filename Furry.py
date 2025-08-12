@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 TOKEN = os.getenv("TOKEN")
 OWNER_ID = 7107785168
 MAX_COUNT = 15
+AUTO_ART_INTERVAL = 3600  # 1 час в секундах
 
 bot = telebot.TeleBot(TOKEN)
 
@@ -18,6 +19,7 @@ BANS_FILE = "bans.json"
 MUTES_FILE = "mutes.json"
 USERS_FILE = "users.json"
 STATE_FILE = "bot_state.json"
+LAST_ACTIVITY_FILE = "last_activity.json"
 
 def load_data(filename):
     if os.path.exists(filename):
@@ -34,6 +36,7 @@ bans = load_data(BANS_FILE)
 mutes = load_data(MUTES_FILE)
 users = load_data(USERS_FILE)
 bot_state = load_data(STATE_FILE)
+last_activity = load_data(LAST_ACTIVITY_FILE)
 
 if not bot_state:
     bot_state = {
@@ -61,6 +64,25 @@ WARN_MESSAGES = {
     5: "Покеда хуесос, предупреждение 5/5. {user} был забанен"
 }
 
+def update_last_activity(chat_id):
+    last_activity[str(chat_id)] = time.time()
+    save_data(last_activity, LAST_ACTIVITY_FILE)
+
+def auto_send_arts():
+    while True:
+        current_time = time.time()
+        for chat_id_str in list(last_activity.keys()):
+            chat_id = int(chat_id_str)
+            if current_time - last_activity[chat_id_str] >= AUTO_ART_INTERVAL:
+                if not bot_state["sleeping"]:
+                    send_art(chat_id)
+                update_last_activity(chat_id)
+        time.sleep(60)
+
+auto_send_thread = threading.Thread(target=auto_send_arts)
+auto_send_thread.daemon = True
+auto_send_thread.start()
+
 def add_user(user):
     user_id = str(user.id)
     if user_id not in users:
@@ -87,6 +109,7 @@ def send_art(chat_id):
     with open(art, "rb") as f:
         bot.send_photo(chat_id, f)
     active_chats[chat_id] = time.time()
+    update_last_activity(chat_id)
 
 def is_admin(chat_id, user_id):
     try:
@@ -147,6 +170,7 @@ def furry_cmd(message):
         return
     
     chat_id = message.chat.id
+    update_last_activity(chat_id)
     parts = message.text.split()
     count = 1
     if len(parts) > 1 and parts[1].isdigit():
@@ -160,6 +184,7 @@ def furry_cmd(message):
             with open(art_path, "rb") as f:
                 bot.send_photo(chat_id, f)
         active_chats[chat_id] = time.time()
+        update_last_activity(chat_id)
 
 @bot.message_handler(commands=['listusers'])
 def list_users_command(message):
@@ -181,8 +206,9 @@ def list_users_command(message):
         text_lines.append(line)
     
     bot.reply_to(message, "\n".join(text_lines))
+    update_last_activity(message.chat.id)
 
-@bot.message_handler(commands=['miahelp'])
+@bot.message_handler(commands=['mihelp'])
 def show_mia_help(message):
     help_text = """<b>📚 Система обращений:</b>
 • Для команд и мини-игр используйте "Мия"
@@ -210,6 +236,7 @@ def show_mia_help(message):
 Мия @user <вопрос> - Задать вопрос"""
 
     bot.reply_to(message, help_text, parse_mode="HTML")
+    update_last_activity(message.chat.id)
 
 @bot.message_handler(commands=['help'])
 def show_owner_help(message):
@@ -227,12 +254,14 @@ def show_owner_help(message):
 /miahelp - Помощь для всех"""
     
     bot.reply_to(message, help_text, parse_mode="HTML")
+    update_last_activity(message.chat.id)
 
 @bot.message_handler(func=lambda message: message.text.lower().startswith("мут "))
 def mute_user(message):
     clean_old_data()
     chat_id = str(message.chat.id)
     admin_id = str(message.from_user.id)
+    update_last_activity(message.chat.id)
     
     if not is_owner(chat_id, admin_id) and not is_admin(chat_id, admin_id):
         bot.reply_to(message, "Недостаточно прав")
@@ -333,6 +362,7 @@ def unmute_user(message):
     clean_old_data()
     chat_id = str(message.chat.id)
     admin_id = str(message.from_user.id)
+    update_last_activity(message.chat.id)
     
     if not is_owner(chat_id, admin_id) and not is_admin(chat_id, admin_id):
         bot.reply_to(message, "Недостаточно прав")
@@ -383,6 +413,7 @@ def warn_user(message):
     chat_id = str(message.chat.id)
     admin_id = str(message.from_user.id)
     target_id = str(message.reply_to_message.from_user.id)
+    update_last_activity(message.chat.id)
     
     if target_id == admin_id:
         bot.reply_to(message, "Нельзя выдать варн себе")
@@ -442,6 +473,7 @@ def remove_warn(message):
     admin_id = str(message.from_user.id)
     target_id = str(message.reply_to_message.from_user.id)
     command = message.text.lower()
+    update_last_activity(message.chat.id)
     
     if not is_owner(chat_id, admin_id) and not is_admin(chat_id, admin_id):
         bot.reply_to(message, "Недостаточно прав")
@@ -477,6 +509,7 @@ def ban_user(message):
     chat_id = str(message.chat.id)
     admin_id = str(message.from_user.id)
     target_id = str(message.reply_to_message.from_user.id)
+    update_last_activity(message.chat.id)
     
     if target_id == admin_id:
         bot.reply_to(message, "Нельзя забанить себя")
@@ -511,6 +544,7 @@ def unban_user(message):
     clean_old_data()
     chat_id = str(message.chat.id)
     admin_id = str(message.from_user.id)
+    update_last_activity(message.chat.id)
     
     if not is_owner(chat_id, admin_id) and not is_admin(chat_id, admin_id):
         bot.reply_to(message, "Недостаточно прав")
@@ -568,6 +602,7 @@ def who_game(message):
         return
     
     chat_id = message.chat.id
+    update_last_activity(chat_id)
     match = re.search(r"кого\s*<(.+?)>", message.text, re.IGNORECASE)
     
     if match:
@@ -600,6 +635,7 @@ def question_game(message):
         return
     
     chat_id = message.chat.id
+    update_last_activity(chat_id)
     match = re.search(r"@(\w+)\s*<(.+?)>", message.text, re.IGNORECASE)
     
     if match:
@@ -618,6 +654,7 @@ def question_game(message):
 def handle_owner_commands(message):
     text = message.text.lower()
     chat_id = message.chat.id
+    update_last_activity(chat_id)
     
     if "спать" in text:
         if bot_state["sleeping"]:
@@ -664,6 +701,7 @@ def handle_owner_commands(message):
 def handle_apology(message):
     user_id = str(message.from_user.id)
     chat_id = message.chat.id
+    update_last_activity(chat_id)
     
     if user_id not in bot_state["ignored_users"]:
         bot.reply_to(message, "За что? Все хорошо.")
@@ -694,6 +732,7 @@ def handle_text_messages(message):
     
     chat_id = str(message.chat.id)
     user_id = str(message.from_user.id)
+    update_last_activity(chat_id)
     
     if chat_id in bans and user_id in bans[chat_id]:
         try:
@@ -805,7 +844,7 @@ def handle_text_messages(message):
             mention_text = " ".join(mentions)
             bot.send_message(chat_id, f"Осуждаю, я щас админов позову: {mention_text}")
         except Exception:
-            bot.send_message(chat_id, "Осуждаю, я щас админов позову")
+                        bot.send_message(chat_id, "Осуждаю, я щас админов позову")
         return
     
     if message.reply_to_message and message.reply_to_message.from_user.id == bot.get_me().id:
