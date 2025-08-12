@@ -1008,9 +1008,19 @@ def handle_text_messages(message):
         }
         
         for pattern, resp in reply_phrases.items():
-            if re.search(pattern, text):
-                bot.reply_to(message, resp)
-                return
+    if re.search(pattern, text):
+        bot.reply_to(message, resp)
+        return
+
+# Отдельно — вне любого блока кода:
+@bot.message_handler(commands=['start'])
+def send_welcome(message):
+    welcome_text = (
+        "Приветик~ Добавь меня в свой чатик, пожалуйста! "
+        "Если я вдруг не буду работать, то стоит сделать меня админом"
+        "Обещаю быть хорошей! 💕"
+    )
+    bot.send_message(message.chat.id, welcome_text)
 
 # Запуск бота
 if __name__ == "__main__":
