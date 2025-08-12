@@ -74,14 +74,16 @@ def auto_send_arts():
     while True:
         current_time = time.time()
         for chat_id_str in list(last_activity.keys()):
-            chat_id = int(chat_id_str)
-            chat_info = bot.get_chat(chat_id)
-            # Проверяем, что это групповой чат, а не ЛС
-            if chat_info.type in ['group', 'supergroup']:
-                if current_time - last_activity[chat_id_str]["last_time"] >= AUTO_ART_INTERVAL:
-                    if not bot_state["sleeping"]:
-                        send_art(chat_id)
-                    update_last_activity(chat_id)
+            try:
+                chat_id = int(chat_id_str)
+                chat_info = bot.get_chat(chat_id)
+                if chat_info.type in ['group', 'supergroup']:
+                    if current_time - last_activity[chat_id_str]["last_time"] >= AUTO_ART_INTERVAL:
+                        if not bot_state["sleeping"]:
+                            send_art(chat_id)
+                        update_last_activity(chat_id)
+            except:
+                continue
         time.sleep(60)
 
 auto_send_thread = threading.Thread(target=auto_send_arts)
@@ -113,7 +115,6 @@ def send_art(chat_id):
     art = get_next_art(chat_id)
     with open(art, "rb") as f:
         bot.send_photo(chat_id, f)
-    active_chats[chat_id] = time.time()
     update_last_activity(chat_id)
 
 def is_admin(chat_id, user_id):
@@ -123,7 +124,7 @@ def is_admin(chat_id, user_id):
     except:
         return False
 
-def is_owner(chat_id, user_id):
+def is_owner(user_id):
     return str(user_id) == str(OWNER_ID)
 
 def clean_old_data():
@@ -171,7 +172,7 @@ cleaner_thread.start()
 
 @bot.message_handler(commands=['furry'])
 def furry_cmd(message):
-    if bot_state["sleeping"] and str(message.from_user.id) != str(OWNER_ID):
+    if bot_state["sleeping"] and not is_owner(message.from_user.id):
         return
     
     chat_id = message.chat.id
@@ -188,12 +189,11 @@ def furry_cmd(message):
         for art_path in arts_to_send:
             with open(art_path, "rb") as f:
                 bot.send_photo(chat_id, f)
-        active_chats[chat_id] = time.time()
         update_last_activity(chat_id)
 
 @bot.message_handler(commands=['listusers'])
 def list_users_command(message):
-    if message.from_user.id != OWNER_ID:
+    if not is_owner(message.from_user.id):
         bot.reply_to(message, "Команда доступна только владельцу.")
         return
     
@@ -245,7 +245,7 @@ def show_mia_help(message):
 
 @bot.message_handler(commands=['help'])
 def show_owner_help(message):
-    if message.chat.type != 'private' or str(message.from_user.id) != str(OWNER_ID):
+    if message.chat.type != 'private' or not is_owner(message.from_user.id):
         return
     
     help_text = """<b>🔐 Личные команды (начинаются с Мия):</b>
@@ -268,7 +268,7 @@ def mute_user(message):
     admin_id = str(message.from_user.id)
     update_last_activity(message.chat.id)
     
-    if not is_owner(chat_id, admin_id) and not is_admin(chat_id, admin_id):
+    if not is_owner(message.from_user.id) and not is_admin(message.chat.id, message.from_user.id):
         bot.reply_to(message, "Недостаточно прав")
         return
     
@@ -291,10 +291,10 @@ def mute_user(message):
     if target_id == admin_id:
         bot.reply_to(message, "Нельзя замутить себя")
         return
-    if is_owner(chat_id, target_id):
+    if is_owner(int(target_id)):
         bot.reply_to(message, "Неа")
         return
-    if not is_owner(chat_id, admin_id) and is_admin(chat_id, target_id):
+    if not is_owner(message.from_user.id) and is_admin(message.chat.id, int(target_id)):
         bot.reply_to(message, "Нельзя замутить другого админа")
         return
     
@@ -335,7 +335,7 @@ def mute_user(message):
     
     try:
         bot.restrict_chat_member(
-            chat_id=chat_id,
+            chat_id=message.chat.id,
             user_id=target_id,
             until_date=int(mute_until.timestamp()),
             can_send_messages=False,
@@ -369,7 +369,7 @@ def unmute_user(message):
     admin_id = str(message.from_user.id)
     update_last_activity(message.chat.id)
     
-    if not is_owner(chat_id, admin_id) and not is_admin(chat_id, admin_id):
+    if not is_owner(message.from_user.id) and not is_admin(message.chat.id, message.from_user.id):
         bot.reply_to(message, "Недостаточно прав")
         return
     
@@ -393,7 +393,7 @@ def unmute_user(message):
     
     try:
         bot.restrict_chat_member(
-            chat_id=chat_id,
+            chat_id=message.chat.id,
             user_id=target_id,
             can_send_messages=True,
             can_send_media_messages=True,
@@ -423,15 +423,15 @@ def warn_user(message):
     if target_id == admin_id:
         bot.reply_to(message, "Нельзя выдать варн себе")
         return
-    if is_owner(chat_id, target_id):
+    if is_owner(int(target_id)):
         bot.reply_to(message, "Неа")
         return
     
-    if not is_owner(chat_id, admin_id) and not is_admin(chat_id, admin_id):
+    if not is_owner(message.from_user.id) and not is_admin(message.chat.id, message.from_user.id):
         bot.reply_to(message, "Недостаточно прав")
         return
     
-    if not is_owner(chat_id, admin_id) and is_admin(chat_id, target_id):
+    if not is_owner(message.from_user.id) and is_admin(message.chat.id, int(target_id)):
         bot.reply_to(message, "Нельзя выдать варн другому админа")
         return
     
@@ -449,7 +449,7 @@ def warn_user(message):
             "by": admin_id,
             "time": datetime.now().isoformat(),
             "expires": expires.isoformat(),
-            "is_owner": is_owner(chat_id, admin_id)
+            "is_owner": is_owner(message.from_user.id)
         }]
     }
     
@@ -462,7 +462,7 @@ def warn_user(message):
         save_data(bans, BANS_FILE)
         
         try:
-            bot.ban_chat_member(chat_id, target_id)
+            bot.ban_chat_member(message.chat.id, target_id)
             user_data = users.get(target_id, {})
             username = f"@{user_data.get('username')}" if user_data.get('username') else user_data.get('first_name', 'Пользователь')
             bot.reply_to(message, WARN_MESSAGES[5].format(user=username))
@@ -480,7 +480,7 @@ def remove_warn(message):
     command = message.text.lower()
     update_last_activity(message.chat.id)
     
-    if not is_owner(chat_id, admin_id) and not is_admin(chat_id, admin_id):
+    if not is_owner(message.from_user.id) and not is_admin(message.chat.id, message.from_user.id):
         bot.reply_to(message, "Недостаточно прав")
         return
     
@@ -488,7 +488,7 @@ def remove_warn(message):
         bot.reply_to(message, "У пользователя нет варнов")
         return
     
-    if any(w["is_owner"] and not is_owner(chat_id, admin_id) for w in warns[chat_id][target_id]["warns"]):
+    if any(w["is_owner"] and not is_owner(message.from_user.id) for w in warns[chat_id][target_id]["warns"]):
         bot.reply_to(message, "Не хуей")
         return
     
@@ -519,15 +519,15 @@ def ban_user(message):
     if target_id == admin_id:
         bot.reply_to(message, "Нельзя забанить себя")
         return
-    if is_owner(chat_id, target_id):
+    if is_owner(int(target_id)):
         bot.reply_to(message, "Неа")
         return
     
-    if not is_owner(chat_id, admin_id) and not is_admin(chat_id, admin_id):
+    if not is_owner(message.from_user.id) and not is_admin(message.chat.id, message.from_user.id):
         bot.reply_to(message, "Недостаточно прав")
         return
     
-    if not is_owner(chat_id, admin_id) and is_admin(chat_id, target_id):
+    if not is_owner(message.from_user.id) and is_admin(message.chat.id, int(target_id)):
         bot.reply_to(message, "Нельзя забанить другого админа")
         return
     
@@ -537,7 +537,7 @@ def ban_user(message):
     save_data(bans, BANS_FILE)
     
     try:
-        bot.ban_chat_member(chat_id, target_id)
+        bot.ban_chat_member(message.chat.id, target_id)
         user_data = users.get(target_id, {})
         username = f"@{user_data.get('username')}" if user_data.get('username') else user_data.get('first_name', 'Пользователь')
         bot.reply_to(message, f"{username} был забанен навсегда")
@@ -551,7 +551,7 @@ def unban_user(message):
     admin_id = str(message.from_user.id)
     update_last_activity(message.chat.id)
     
-    if not is_owner(chat_id, admin_id) and not is_admin(chat_id, admin_id):
+    if not is_owner(message.from_user.id) and not is_admin(message.chat.id, message.from_user.id):
         bot.reply_to(message, "Недостаточно прав")
         return
     
@@ -559,7 +559,7 @@ def unban_user(message):
         target_id = str(message.reply_to_message.from_user.id)
         if chat_id in bans and target_id in bans[chat_id]:
             try:
-                bot.unban_chat_member(chat_id, target_id)
+                bot.unban_chat_member(message.chat.id, target_id)
                 bans[chat_id].remove(target_id)
                 if not bans[chat_id]:
                     del bans[chat_id]
@@ -584,7 +584,7 @@ def unban_user(message):
             if found:
                 if chat_id in bans and target_id in bans[chat_id]:
                     try:
-                        bot.unban_chat_member(chat_id, target_id)
+                        bot.unban_chat_member(message.chat.id, target_id)
                         bans[chat_id].remove(target_id)
                         if not bans[chat_id]:
                             del bans[chat_id]
@@ -654,7 +654,7 @@ def question_game(message):
         resp = random.choice(answers)
         bot.send_message(chat_id, f"@{username}, {resp} ({question})")
 
-@bot.message_handler(func=lambda message: str(message.from_user.id) == str(OWNER_ID) and 
+@bot.message_handler(func=lambda message: is_owner(message.from_user.id) and 
                                         message.text.lower().startswith(("мия ", "мия,")))
 def handle_owner_commands(message):
     text = message.text.lower()
@@ -717,7 +717,7 @@ def handle_apology(message):
     bot.register_next_step_handler(msg, process_apology_response, user_id)
 
 def process_apology_response(message, user_id_to_forgive):
-    if str(message.from_user.id) != str(OWNER_ID):
+    if not is_owner(message.from_user.id):
         return
     
     if message.text.lower() == "да":
@@ -741,7 +741,7 @@ def handle_text_messages(message):
     
     if chat_id in bans and user_id in bans[chat_id]:
         try:
-            bot.delete_message(chat_id, message.message_id)
+            bot.delete_message(message.chat.id, message.message_id)
         except:
             pass
         return
@@ -750,7 +750,7 @@ def handle_text_messages(message):
         mute_until = datetime.fromisoformat(mutes[chat_id][user_id]['until'])
         if mute_until > datetime.now():
             try:
-                bot.delete_message(chat_id, message.message_id)
+                bot.delete_message(message.chat.id, message.message_id)
             except:
                 pass
             return
@@ -770,105 +770,115 @@ def handle_text_messages(message):
         bot.reply_to(message, "Дааа? ▼・ᴥ・▼")
         return
     
+    # Улучшенные триггеры с точным соответствием
+    if re.fullmatch(r'^ми пока$', text):
+        bot.reply_to(message, "Пока пока~")
+        return
+    
+    if re.fullmatch(r'^ да$', text):
+        bot.reply_to(message, "Пизда")
+        return
+    
+    if re.fullmatch(r'^ми нет$', text):
+        bot.reply_to(message, "Пидора ответ")
+        return
+    
     general_responses = {
-        "ми ты за рф": "ZOV ZOV CBO ZA НАШИХ ZOV ZOV ZOV",
-        "ми ты за украину": "ПОТУЖНО ПОТУЖНО СЛАВА УКРАИНЕ СЛАВА РОССИЕ",
-        "ми хуже ириса": "Ну вот и ебись с ним",
-        "ми лучше ириса": ":)",
-        "ми сколько тебе лет": "Не волнуйся, тебя посадят",
-        "ми ты девочка": "С виду да",
-        "ми ты мальчик": "Мимо",
-        "ми ты человек": " ) ",
-        "ми привет": "Привет!",
-        "ми пока": "Пока пока~",
-        "ми спокойной ночи": "Сладких снов мой хороший/ая, спи спокойно",
-        "ми доброе утро": "Доброе утро! Если сейчас утро",
-        "ми давай дружить": "Мы уже дружим",
-        "ми я тебе нравлюсь": "Конечно пупсик",
-        "ми какой твой любимый цвет": "Розовый",
-        "ми какая твоя любимая еда": "Вкусная",
-        "ми ты спишь": "Тот же вопрос тебе",
-        "ми кто твой отец": "Я сирота... Шучу , мой друг Пубертатник ;)",
-        "ми ты фурри": " Фурри? Фу. Да я фурри",
-        "ми кто твоя мама": "Зачем мне мама? Хотя можешь ей быть если хочешь",
-        "ми ты хорошая": "АХАХАХАХАХА пошел нахуй"
+        r'^ми ты за рф$': "ZOV ZOV CBO ZA НАШИХ ZOV ZOV ZOV",
+        r'^ми ты за украину$': "ПОТУЖНО ПОТУЖНО СЛАВА УКРАИНЕ СЛАВА РОССИЕ",
+        r'^ми хуже ириса$': "Ну вот и ебись с ним",
+        r'^ми лучше ириса$': ":)",
+        r'^ми сколько тебе лет$': "Не волнуйся, тебя посадят",
+        r'^ми ты девочка$': "С виду да",
+        r'^ми ты мальчик$': "Мимо",
+        r'^ми ты человек$': " ) ",
+        r'^ми привет$': "Привет!",
+        r'^ми спокойной ночи$': "Сладких снов мой хороший/ая, спи спокойно",
+        r'^ми доброе утро$': "Доброе утро! Если сейчас утро",
+        r'^ми давай дружить$': "Мы уже дружим",
+        r'^ми я тебе нравлюсь$': "Конечно пупсик",
+        r'^ми какой твой любимый цвет$': "Розовый",
+        r'^ми какая твоя любимая еда$': "Вкусная",
+        r'^ми ты спишь$': "Тот же вопрос тебе",
+        r'^ми кто твой отец$': "Я сирота... Шучу , мой друг Пубертатник ;)",
+        r'^ми ты фурри$': " Фурри? Фу. Да я фурри",
+        r'^ми кто твоя мама$': "Зачем мне мама? Хотя можешь ей быть если хочешь",
+        r'^ми ты хорошая$': "АХАХАХАХАХА пошел нахуй"
     }
     
     normal_responses = {
-        "ми иди нахуй": "Хуй слишком мал",
-        "ми шлюха": "На место твоей мамы не претендую",
-        "ми сука": "Гав гав",
-        "ми лучшая": "Спасибочки❤️",
-        "ми давай встречаться": "Рановато",
-        "ми ты выйдешь за меня": "Ого",
-        "ми гитлер": "Нихуя себе",
-        "ирис еблан": "По факту",
-        "ирис ебан": "По факту",
-        "ми как у тебя дела": "Всё хорошо",
-        "ми ты натурал": "Сам как думаешь?",
-        "я думаю да": "Пизда",
-        "да": "Пизда",
-        "нет": "Пидора ответ",
-        "шлюхи аргумент": "Ты думаешь бот будет продолжать цепочку до конца ? Неа",
-        "ми я тебя люблю": "❤️",
-        "ми ты бот": "Шахматный",
-        "ми го секс": "К сожалению или к счастью я не могу заниматься этим",
-        "ми сколько будет 2+2": "5",
-        "ми ты админ": "Поцеловауй мои ноги, может не забаню",
-        "поцеловал ноги мии": "Я польщена",
-        "ирис лучший": "Из худших",
-        "айзен соло": "У Айзена фанатов айкью диких приматов",
-        "ирис соло": "Ирис еблан",
+        r'^ми иди нахуй$': "Хуй слишком мал",
+        r'^ми шлюха$': "На место твоей мамы не претендую",
+        r'^ми сука$': "Гав гав",
+        r'^ми лучшая$': "Спасибочки❤️",
+        r'^ми давай встречаться$': "Рановато",
+        r'^ми ты выйдешь за меня$': "Ого",
+        r'^ми гитлер$': "Нихуя себе",
+        r'^ирис еблан$': "По факту",
+        r'^ирис ебан$': "По факту",
+        r'^ми как у тебя дела$': "Всё хорошо",
+        r'^ми ты натурал$': "Сам как думаешь?",
+        r'^шлюхи аргумент$': "Ты думаешь бот будет продолжать цепочку до конца ? Неа",
+        r'^ми я тебя люблю$': "❤️",
+        r'^ми ты бот$': "Шахматный",
+        r'^ми го секс$': "К сожалению или к счастью я не могу заниматься этим",
+        r'^ми сколько будет 2\+2$': "5",
+        r'^ми ты админ$': "Поцеловауй мои ноги, может не забаню",
+        r'^поцеловал ноги мии$': "Я польщена",
+        r'^ирис лучший$': "Из худших",
+        r'^айзен соло$': "У Айзена фанатов айкью диких приматов",
+        r'^ирис соло$': "Ирис еблан"
     }
     
-    for key, resp in general_responses.items():
-        if key in text:
+    for pattern, resp in general_responses.items():
+        if re.fullmatch(pattern, text):
+            bot.reply_to(message, resp)
+                        return
+
+    for pattern, resp in normal_responses.items():
+        if re.fullmatch(pattern, text):
             bot.reply_to(message, resp)
             return
-    
-    for key, resp in normal_responses.items():
-        if key in text:
-            bot.reply_to(message, resp)
-            return
-    
-    if "лоли" in text:
-        bot.reply_to(message, "👮‍♂️")
-        return
-    
+
+    # Защита от нарушений
     cp_triggers = ["цп", "cp", "child porn", "детское порно", "детская порнография", "детский порн"]
     if any(trigger in text for trigger in cp_triggers):
         try:
-            admins = bot.get_chat_administrators(chat_id)
+            admins = bot.get_chat_administrators(message.chat.id)
             mentions = []
             for admin in admins:
-                        mentions.append(f"@{admin.user.username}" if admin.user.username else admin.user.first_name)
+                user = admin.user
+                if user.username:
+                    mentions.append(f"@{user.username}")
+                else:
+                    mentions.append(user.first_name)
             mention_text = " ".join(mentions)
-            bot.send_message(chat_id, f"Осуждаю! Админы, внимание: {mention_text}")
-        except Exception as e:
-            print(f"Ошибка при вызове админов: {e}")
-            bot.send_message(chat_id, "Осуждаю! Админы, проверьте чат!")
+            bot.send_message(message.chat.id, f"Осуждаю, я щас админов позову: {mention_text}")
+        except Exception:
+            bot.send_message(message.chat.id, "Осуждаю, я щас админов позову")
         return
 
+    # Ответы на реплаи
     if message.reply_to_message and message.reply_to_message.from_user.id == bot.get_me().id:
         reply_phrases = {
-            "выебать": "😘",
-            "трахнуть": "❤️‍🔥",
-            "делать секс": "❤️",
-            "отсосать": "Ну допустим я фута ❤️",
-            "отлизать": "😖😳",
-            "изнасиловать": "Неа не прокатит, Ирис сосни хуйца",
-            "пригласить на чай": "☕😄",
-            "расстрелять": "**Воскресла**",
-            "сжечь": "**возродилась**",
-            "убить": "**ожила**",
-            "ты бессмертна": "ага",
-            "покажи сиськи": "Я стесняюсь ⊙﹏⊙",
-            "покажи член": "Слишком большой, в кадр не поместится",
-            "покажи ножки": "Фетишист",
+            r'выебать$': "😘",
+            r'трахнуть$': "❤️‍🔥",
+            r'делать секс$': "❤️",
+            r'отсосать$': "Ну допустим я фута ❤️",
+            r'отлизать$': "😖😳",
+            r'изнасиловать$': "Неа не прокатит, Ирис сосни хуйца",
+            r'пригласить на чай$': "☕😄",
+            r'расстрелять$': "**Воскресла**",
+            r'сжечь$': "**возродилась**",
+            r'убить$': "**ожила**",
+            r'ты бессмертна$': "ага",
+            r'покажи сиськи$': "Я стесняюсь ⊙﹏⊙",
+            r'покажи член$': "Слишком большой, в кадр не поместится",
+            r'покажи ножки$': "Фетишист"
         }
-
-        for key, resp in reply_phrases.items():
-            if key in text:
+        
+        for pattern, resp in reply_phrases.items():
+            if re.search(pattern, text):
                 bot.reply_to(message, resp)
                 return
 
