@@ -779,7 +779,7 @@ def handle_text_messages(message):
         bot.reply_to(message, "Пизда")
         return
     
-    if re.fullmatch(r'^ми нет$', text):
+    if re.search(r'(^|\W)нет[!?,.]*$', text, re.IGNORECASE):
         bot.reply_to(message, "Пидора ответ")
         return
     
