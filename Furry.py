@@ -730,6 +730,16 @@ def process_apology_response(message, user_id_to_forgive):
 
 @bot.message_handler(content_types=['text'])
 def handle_text_messages(message):
+    text = message.text.lower() if message.text else ""
+
+    # Пропускаем, если это команда
+    if text.startswith("/"):
+        return
+
+    # Пропускаем, если это мини-игра
+    if text.startswith("мия кого") or text.startswith("мия @"):
+        return
+
     add_user(message.from_user)
     text_raw = message.text
     if not text_raw:
