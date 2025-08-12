@@ -839,10 +839,16 @@ def process_apology_response(message, user_id_to_forgive):
 def welcome_new_member(message):
     chat_id = message.chat.id
     update_last_activity(chat_id)
-    
+
     for user in message.new_chat_members:
         if user.id == bot.get_me().id:
-            bot.send_message(chat_id, "Всем привет!")
+            # Проверяем черный список
+            if is_chat_blacklisted(chat_id):
+                bot.send_message(chat_id, "Ахуели")
+                bot.leave_chat(chat_id)
+                return  # чтобы не слать "Всем привет!"
+            else:
+                bot.send_message(chat_id, "Всем привет!")
         else:
             bot.send_message(chat_id, "Новенький, скинь ножки")
         add_user(user)
