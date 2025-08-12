@@ -18,7 +18,6 @@ def save_blacklist(blacklist):
 
 def add_chat(chat_id, chat_title=None):
     blacklist = load_blacklist()
-    # сохраняем список в формате [{"id": chat_id, "title": chat_title}, ...]
     if not any(chat["id"] == chat_id for chat in blacklist):
         blacklist.append({"id": chat_id, "title": chat_title or "Без названия"})
         save_blacklist(blacklist)
@@ -33,3 +32,7 @@ def remove_chat_by_index(index):
 
 def get_blacklist():
     return load_blacklist()
+
+def is_chat_blacklisted(chat_id):
+    blacklist = load_blacklist()
+    return any(chat["id"] == chat_id for chat in blacklist)
