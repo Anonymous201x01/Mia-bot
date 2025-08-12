@@ -208,7 +208,7 @@ def list_users_command(message):
     bot.reply_to(message, "\n".join(text_lines))
     update_last_activity(message.chat.id)
 
-@bot.message_handler(commands=['mihelp'])
+@bot.message_handler(commands=['mihelp'], priority=10)  # Высокий приоритет
 def show_mia_help(message):
     help_text = """<b>📚 Система обращений:</b>
 • Для команд и мини-игр используйте "Мия"
