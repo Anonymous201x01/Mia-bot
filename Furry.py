@@ -840,7 +840,7 @@ def handle_text_messages(message):
         try:
             admins = bot.get_chat_administrators(chat_id)
             mentions = []
-            for admin in admins
+            for admin in admins:
                         mentions.append(f"@{admin.user.username}" if admin.user.username else admin.user.first_name)
             mention_text = " ".join(mentions)
             bot.send_message(chat_id, f"Осуждаю! Админы, внимание: {mention_text}")
