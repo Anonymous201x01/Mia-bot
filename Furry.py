@@ -6,7 +6,7 @@ import re
 import json
 import threading
 from datetime import datetime, timedelta
-from blacklist import add_chat, remove_chat_by_index, get_blacklist
+
 TOKEN = os.getenv("TOKEN")
 OWNER_ID = 7107785168
 MAX_COUNT = 15
@@ -839,16 +839,10 @@ def process_apology_response(message, user_id_to_forgive):
 def welcome_new_member(message):
     chat_id = message.chat.id
     update_last_activity(chat_id)
-
+    
     for user in message.new_chat_members:
         if user.id == bot.get_me().id:
-            # Проверяем черный список
-            if is_chat_blacklisted(chat_id):
-                bot.send_message(chat_id, "Ахуели")
-                bot.leave_chat(chat_id)
-                return  # чтобы не слать "Всем привет!"
-            else:
-                bot.send_message(chat_id, "Всем привет!")
+            bot.send_message(chat_id, "Всем привет!")
         else:
             bot.send_message(chat_id, "Новенький, скинь ножки")
         add_user(user)
