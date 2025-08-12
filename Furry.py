@@ -585,7 +585,7 @@ def ban_user(message):
         user_data = users.get(target_id, {})
         username = f"@{user_data.get('username')}" if user_data.get('username') else user_data.get('first_name', 'Пользователь')
         bot.reply_to(message, f"{username} был забанен навсегда")
-except Exception as e:
+    except Exception as e:
         bot.reply_to(message, f"Ошибка: {str(e)}")
 
 @bot.message_handler(func=lambda message: message.text.lower().startswith(("разбан ", "разбан")))
