@@ -1007,10 +1007,10 @@ def handle_text_messages(message):
             r'покажи ножки$': "Фетишист"
         }
         
-        for pattern, resp in reply_phrases.items():
-    if re.search(pattern, text):
-        bot.reply_to(message, resp)
-        return
+    for pattern, resp in reply_phrases.items():
+        if re.search(pattern, text):
+           bot.reply_to(message, resp)
+           return
 
 # Отдельно — вне любого блока кода:
 @bot.message_handler(commands=['start'])
