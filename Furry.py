@@ -851,7 +851,14 @@ def welcome_new_member(message):
 def goodbye_member(message):
     if message.left_chat_member.id != bot.get_me().id:
         bot.send_message(message.chat.id, "Скатертью дорога, мразь")
-
+@bot.message_handler(commands=['start'])
+def send_welcome(message):
+    welcome_text = (
+        "Приветик~ Добавь меня в свой чатик, пожалуйста! "
+        "Если я вдруг не буду работать, то стоит сделать меня админом. "
+        "Обещаю быть хорошей! 💕"
+    )
+    bot.send_message(message.chat.id, welcome_text)
 @bot.message_handler(content_types=['text'])
 def handle_text_messages(message):
     text_raw = message.text if message.text else ""
@@ -1013,14 +1020,14 @@ def handle_text_messages(message):
            return
 
 # Отдельно — вне любого блока кода:
-@bot.message_handler(commands=['start'])
-def send_welcome(message):
-    welcome_text = (
-        "Приветик~ Добавь меня в свой чатик, пожалуйста! "
-        "Если я вдруг не буду работать, то стоит сделать меня админом"
-        "Обещаю быть хорошей! 💕"
-    )
-    bot.send_message(message.chat.id, welcome_text)
+#@bot.message_handler(commands=['start'])
+#def send_welcome(message):
+    #welcome_text = (
+       # "Приветик~ Добавь меня в свой чатик, пожалуйста! "
+      #  "Если я вдруг не буду работать, то стоит сделать меня админом"
+   #     "Обещаю быть хорошей! 💕"
+#    )
+#    bot.send_message(message.chat.id, welcome_text)
 
 # Запуск бота
 if __name__ == "__main__":
