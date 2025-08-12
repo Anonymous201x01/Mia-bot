@@ -215,6 +215,8 @@ def list_users_command(message):
 
 @bot.message_handler(commands=['miahelp'])
 def show_mia_help(message):
+    print("DEBUG: show_mia_help called:", message.chat.id, message.chat.type, repr(message.text))
+    
     help_text = """<b>📚 Система обращений:</b>
 • Для команд и мини-игр используйте "Мия"
 • Для обычных фраз используйте "Ми"
@@ -730,29 +732,26 @@ def process_apology_response(message, user_id_to_forgive):
 
 @bot.message_handler(content_types=['text'])
 def handle_text_messages(message):
-    # --- DEBUG: убрать/закомментировать после отладки ---
-    print("DEBUG: handle_text_messages got:", message.chat.id, repr(message.text)[:200])
+    # DEBUG
+    print("DEBUG: handle_text_messages got:", message.chat.id, message.chat.type, repr(message.text)[:200])
 
     text = message.text.lower() if message.text else ""
 
-    # Если есть entity типа bot_command — это команда -> пропускаем
+    # 1) Если в entities есть bot_command — это команда (учитывает /cmd@BotName)
     if getattr(message, "entities", None):
         for ent in message.entities:
-            if ent.type == 'bot_command':
+            if getattr(ent, "type", None) == 'bot_command':
                 return
 
-    # Доп. защита: если текст явно начинается с '/', тоже пропускаем
+    # 2) если текст явно начинается с '/', тоже пропускаем
     if text.startswith("/"):
         return
 
-    # Мини-игры: если сообщение содержит ключевые фразы мини-игр — пропускаем
+    # 3) мини-игры: пропускаем (пусть их обработают отдельные хэндлеры)
     if "мия кого" in text or text.startswith("мия @") or text.startswith("мия "):
         return
 
-    add_user(message.from_user)
-    text_raw = message.text
-    if not text_raw:
-        return
+    # дальше — остальная логика
 
     # ... здесь дальше твоя остальная логика ...
     
