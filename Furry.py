@@ -776,8 +776,8 @@ def handle_text_messages(message):
         return
     
     if re.search(r'(^|\W)да[!?,.]*$', text, re.IGNORECASE):
-    bot.reply_to(message, "Пизда")
-    return
+        bot.reply_to(message, "Пизда")
+        return
     
     if re.fullmatch(r'^ми нет$', text):
         bot.reply_to(message, "Пидора ответ")
