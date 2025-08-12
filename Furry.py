@@ -833,7 +833,7 @@ def handle_text_messages(message):
     for pattern, resp in general_responses.items():
         if re.fullmatch(pattern, text):
             bot.reply_to(message, resp)
-                        return
+            return
 
     for pattern, resp in normal_responses.items():
         if re.fullmatch(pattern, text):
