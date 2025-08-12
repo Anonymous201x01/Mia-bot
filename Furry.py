@@ -730,20 +730,31 @@ def process_apology_response(message, user_id_to_forgive):
 
 @bot.message_handler(content_types=['text'])
 def handle_text_messages(message):
+    # --- DEBUG: убрать/закомментировать после отладки ---
+    print("DEBUG: handle_text_messages got:", message.chat.id, repr(message.text)[:200])
+
     text = message.text.lower() if message.text else ""
 
-    # Пропускаем, если это команда
+    # Если есть entity типа bot_command — это команда -> пропускаем
+    if getattr(message, "entities", None):
+        for ent in message.entities:
+            if ent.type == 'bot_command':
+                return
+
+    # Доп. защита: если текст явно начинается с '/', тоже пропускаем
     if text.startswith("/"):
         return
 
-    # Пропускаем, если это мини-игра
-    if text.startswith("мия кого") or text.startswith("мия @"):
+    # Мини-игры: если сообщение содержит ключевые фразы мини-игр — пропускаем
+    if "мия кого" in text or text.startswith("мия @") or text.startswith("мия "):
         return
 
     add_user(message.from_user)
     text_raw = message.text
     if not text_raw:
         return
+
+    # ... здесь дальше твоя остальная логика ...
     
     chat_id = str(message.chat.id)
     user_id = str(message.from_user.id)
