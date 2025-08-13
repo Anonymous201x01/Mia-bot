@@ -1,35 +1,33 @@
 import re
 import os
+import threading
 import yt_dlp
-from telebot import types
+import time
 
-# --- Проверка ссылки ---
+# Проверка ссылки
 def is_valid_url(url):
     pattern = re.compile(r'^https?://[^\s]+$')
     return bool(pattern.match(url))
 
-# --- Получение списка форматов видео ---
+# Получение списка форматов видео
 def get_video_formats(url):
     try:
         ydl_opts = {
             'quiet': True,
             'no_warnings': True,
-            'noplaylist': True,  # чтобы не скачивать плейлисты
+            'noplaylist': True,
         }
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
         
         formats = []
         for f in info.get('formats', []):
-            # Только форматы с видео и аудио
             if f.get('vcodec') != 'none' and f.get('acodec') != 'none':
                 formats.append({
                     'format_id': f['format_id'],
                     'quality': f.get('format_note') or f.get('resolution') or 'unknown',
                     'ext': f['ext']
                 })
-        
-        # Если форматов нет, добавляем основной формат
         if not formats:
             formats.append({
                 'format_id': info.get('format_id'),
@@ -42,18 +40,33 @@ def get_video_formats(url):
         print("Ошибка get_video_formats:", e)
         return []
 
-# --- Скачивание видео ---
-def download_video(url, format_id):
-    filename = "video_download.mp4"
-    ydl_opts = {
-        'format': format_id,
-        'outtmpl': filename,
-        'quiet': True,
-        'noprogress': True
-    }
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        ydl.download([url])
-    return filename
+# Скачивание видео
+def download_video(url, format_id, bot, chat_id, waiting_msg_id):
+    try:
+        filename = "video_download.mp4"
+        ydl_opts = {
+            'format': format_id,
+            'outtmpl': filename,
+            'quiet': True,
+            'noprogress': True
+        }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([url])
+
+        # Отправка видео
+        with open(filename, "rb") as video:
+            bot.send_video(chat_id, video)
+
+        os.remove(filename)
+
+    except Exception as e:
+        bot.send_message(chat_id, f"Ошибка при скачивании: {e}")
+
+    # Удаляем сообщение "подождите..."
+    try:
+        bot.delete_message(chat_id, waiting_msg_id)
+    except:
+        pass
 
 # --- Обработка входящей ссылки ---
 def handle_video_link(bot, message):
@@ -63,66 +76,83 @@ def handle_video_link(bot, message):
         bot.reply_to(message, "Некорректная ссылка")
         return
 
-    # Сохраняем ссылку в память
     if not hasattr(bot, "user_data"):
         bot.user_data = {}
-    bot.user_data[message.chat.id] = {"url": url}
 
-    # Спрашиваем у пользователя подтверждение
-    markup = types.InlineKeyboardMarkup()
-    markup.add(
-        types.InlineKeyboardButton("✅ Да", callback_data="confirm_download_yes"),
-        types.InlineKeyboardButton("❌ Нет", callback_data="confirm_download_no")
-    )
-    bot.send_message(message.chat.id, "Хочешь, чтобы я скачала видео с сайта?", reply_markup=markup)
-
-# --- Обработка нажатий кнопок ---
-def handle_callback(bot, call):
-    chat_id = call.message.chat.id
-    user_data = bot.user_data.get(chat_id, {})
-
-    if call.data == "confirm_download_no":
-        bot.send_message(chat_id, "Поняла")
-        bot.user_data.pop(chat_id, None)
+    # Получаем форматы
+    formats = get_video_formats(url)
+    if not formats:
+        bot.send_message(message.chat.id, "Не удалось получить список качеств или сайт не поддерживается.")
         return
 
-    if call.data == "confirm_download_yes":
-        url = user_data.get("url")
-        formats = get_video_formats(url)
-        if not formats:
-            bot.send_message(chat_id, "Не удалось получить список качеств или сайт не поддерживается.")
+    # Сохраняем контекст ожидания подтверждения
+    bot.user_data[message.chat.id] = {
+        "url": url,
+        "awaiting_confirmation": True,
+        "formats": formats
+    }
+
+    # Сообщение "Скачать видео?"
+    msg = bot.send_message(message.chat.id, "Скачать видео? Д/Н")
+    bot.user_data[message.chat.id]["confirmation_msg_id"] = msg.message_id
+
+    # Таймер на 5 минут для автоматического удаления
+    def timeout():
+        time.sleep(300)  # 5 минут
+        data = bot.user_data.get(message.chat.id)
+        if data and data.get("awaiting_confirmation"):
+            try:
+                bot.delete_message(message.chat.id, msg.message_id)
+            except:
+                pass
+            bot.user_data.pop(message.chat.id, None)
+
+    threading.Thread(target=timeout).start()
+
+# --- Обработка текстового ответа ---
+def handle_text_response(bot, message):
+    chat_id = message.chat.id
+    text = message.text.strip().lower()
+
+    user_data = getattr(bot, "user_data", {}).get(chat_id)
+    if not user_data:
+        return
+
+    # Если ожидаем подтверждение Д/Н
+    if user_data.get("awaiting_confirmation"):
+        if text == "н":
+            bot.send_message(chat_id, "Отмена")
             bot.user_data.pop(chat_id, None)
             return
+        if text == "д":
+            # Отправляем список форматов с номерами
+            formats = user_data.get("formats", [])
+            msg_text = "Выберите качество (напишите номер):\n"
+            for i, f in enumerate(formats[:10], 1):  # максимум 10 вариантов
+                msg_text += f"{i}. {f['quality']} ({f['ext']})\n"
+            msg = bot.send_message(chat_id, msg_text)
+            user_data["awaiting_confirmation"] = False
+            user_data["awaiting_format_choice"] = True
+            user_data["formats_msg_id"] = msg.message_id
+            return
 
-        # Создаем кнопки для выбора качества
-        markup = types.InlineKeyboardMarkup()
-        for f in formats[:10]:  # максимум 10 вариантов
-            btn_text = f"{f['quality']} ({f['ext']})"
-            callback_data = f"download_format_{f['format_id']}"
-            markup.add(types.InlineKeyboardButton(btn_text, callback_data=callback_data))
-
-        bot.send_message(chat_id, "Выбери качество:", reply_markup=markup)
-        bot.user_data[chat_id]["formats"] = formats
-
-    elif call.data.startswith("download_format_"):
-        format_id = call.data.replace("download_format_", "")
-        url = user_data.get("url")
-
-        # Отправляем "подождите..." и сохраняем сообщение
-        waiting_msg = bot.send_message(chat_id, "Подождите...")
-
-        try:
-            filename = download_video(url, format_id)
-
-            # Отправка видео
-            with open(filename, "rb") as video:
-                bot.send_video(chat_id, video)
-
-            os.remove(filename)
-
-        except Exception as e:
-            bot.send_message(chat_id, f"Ошибка при скачивании: {e}")
-
-        # Удаляем сообщение "подождите..."
-        bot.delete_message(chat_id, waiting_msg.message_id)
-        bot.user_data.pop(chat_id, None)
+    # Если ожидаем выбор формата
+    if user_data.get("awaiting_format_choice"):
+        if text.isdigit():
+            idx = int(text) - 1
+            formats = user_data.get("formats", [])
+            if 0 <= idx < len(formats):
+                format_id = formats[idx]['format_id']
+                url = user_data.get("url")
+                waiting_msg = bot.send_message(chat_id, "Подождите...")
+                threading.Thread(target=download_video, args=(url, format_id, bot, chat_id, waiting_msg.message_id)).start()
+                # Удаляем контекст
+                try:
+                    bot.delete_message(chat_id, user_data.get("formats_msg_id"))
+                except:
+                    pass
+                bot.user_data.pop(chat_id, None)
+                return
+            else:
+                bot.send_message(chat_id, "Неверный номер, попробуйте снова.")
+                return
