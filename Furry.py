@@ -4,6 +4,7 @@ import time
 import os
 import re
 import json
+import video_downloader  # модуль скачивания видео
 import threading
 from datetime import datetime, timedelta
 
@@ -854,7 +855,13 @@ def goodbye_member(message):
 
 @bot.message_handler(content_types=['text'])
 def handle_text_messages(message):
-    text_raw = message.text if message.text else ""
+    text_raw = message.text.strip() if message.text else ""
+
+    # --- Обработка ссылки для скачивания видео ---
+    if text_raw.startswith("http://") or text_raw.startswith("https://"):
+        import video_downloader  # импорт можно перенести в начало файла
+        video_downloader.handle_video_link(bot, message)
+        return
     
     # Пропускаем команды и мини-игры
     if text_raw.startswith('/'):
