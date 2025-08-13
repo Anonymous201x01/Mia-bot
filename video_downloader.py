@@ -11,22 +11,35 @@ def is_valid_url(url):
 # --- Получение списка форматов видео ---
 def get_video_formats(url):
     try:
-        ydl_opts = {}
+        ydl_opts = {
+            'quiet': True,
+            'no_warnings': True,
+            'noplaylist': True,  # чтобы не скачивать плейлисты
+        }
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
+        
         formats = []
         for f in info.get('formats', []):
-            # Оставляем только видео с аудио
+            # Только форматы с видео и аудио
             if f.get('vcodec') != 'none' and f.get('acodec') != 'none':
-                quality = f.get('format_note') or f.get('resolution') or 'unknown'
-                if f.get('ext'):
-                    formats.append({
-                        'format_id': f['format_id'],
-                        'quality': quality,
-                        'ext': f['ext']
-                    })
+                formats.append({
+                    'format_id': f['format_id'],
+                    'quality': f.get('format_note') or f.get('resolution') or 'unknown',
+                    'ext': f['ext']
+                })
+        
+        # Если форматов нет, добавляем основной формат
+        if not formats:
+            formats.append({
+                'format_id': info.get('format_id'),
+                'quality': 'default',
+                'ext': info.get('ext', 'mp4')
+            })
         return formats
-    except Exception:
+
+    except Exception as e:
+        print("Ошибка get_video_formats:", e)
         return []
 
 # --- Скачивание видео ---
@@ -83,7 +96,7 @@ def handle_callback(bot, call):
 
         # Создаем кнопки для выбора качества
         markup = types.InlineKeyboardMarkup()
-        for f in formats[:10]:  # Показываем максимум 10 вариантов
+        for f in formats[:10]:  # максимум 10 вариантов
             btn_text = f"{f['quality']} ({f['ext']})"
             callback_data = f"download_format_{f['format_id']}"
             markup.add(types.InlineKeyboardButton(btn_text, callback_data=callback_data))
@@ -95,16 +108,21 @@ def handle_callback(bot, call):
         format_id = call.data.replace("download_format_", "")
         url = user_data.get("url")
 
-        bot.send_message(chat_id, "Скачиваю, подожди...")
+        # Отправляем "подождите..." и сохраняем сообщение
+        waiting_msg = bot.send_message(chat_id, "Подождите...")
 
         try:
             filename = download_video(url, format_id)
 
+            # Отправка видео
             with open(filename, "rb") as video:
                 bot.send_video(chat_id, video)
 
             os.remove(filename)
+
         except Exception as e:
             bot.send_message(chat_id, f"Ошибка при скачивании: {e}")
 
+        # Удаляем сообщение "подождите..."
+        bot.delete_message(chat_id, waiting_msg.message_id)
         bot.user_data.pop(chat_id, None)
