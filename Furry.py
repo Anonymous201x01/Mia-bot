@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 TOKEN = os.getenv("TOKEN")
 OWNER_ID = 7107785168
 MAX_COUNT = 15
-AUTO_ART_INTERVAL = 3600  # 1 час в секундах
+AUTO_ART_INTERVAL = 20000  # 1 час в секундах
 
 bot = telebot.TeleBot(TOKEN)
 
